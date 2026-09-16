@@ -14,6 +14,14 @@
       },
       "oauth_client": [
         {
+          "client_id": "502227907291-bd3lln9f7ij8h9u7ooe02g1c059g90cl.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.richierey.kyuby",
+            "certificate_hash": "f2329673bca42817308f7cde01fd6a2b64699f5c"
+          }
+        },
+        {
           "client_id": "502227907291-erhllfn7ao4rpii4ld6o55vlvgvqlhnn.apps.googleusercontent.com",
           "client_type": 3
         }
