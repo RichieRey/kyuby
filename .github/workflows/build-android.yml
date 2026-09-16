@@ -37,8 +37,10 @@ jobs:
           distribution: temurin
           java-version: 21
 
-      - name: Setup Android SDK
-        uses: android-actions/setup-android@v3
+      # Nota: no usamos android-actions/setup-android (acción de un tercero,
+      # sin mantenimiento y con fallos frecuentes al descargar el SDK).
+      # Los runners "ubuntu-latest" de GitHub ya traen el Android SDK
+      # preinstalado (ANDROID_HOME configurado), así que Gradle lo detecta solo.
 
       - name: Sincronizar Capacitor con Android
         run: npx cap sync android
