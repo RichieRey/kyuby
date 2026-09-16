@@ -101,7 +101,7 @@ export default function App() {
     const parts = []
     if (vencidos) parts.push(`${vencidos} vencido(s)`)
     if (proximos) parts.push(`${proximos} por vencer`)
-    new Notification('Kyuby', { body: parts.join(' · '), icon: '/kyuby/icons/icon-192.png' })
+    new Notification('Kyuby', { body: parts.join(' · '), icon: `${import.meta.env.BASE_URL}icons/icon-192.png` })
   }, [alerts, cursor])
 
   async function saveItem(data) {
@@ -170,7 +170,9 @@ export default function App() {
     <div className="app-shell">
       <header className="app-header">
         <div className="brand">
-          <span className="brand-icon">🧾</span>
+          <span className="brand-icon">
+            <img src={`${import.meta.env.BASE_URL}icons/fox-mark.png`} alt="" />
+          </span>
           <span>Kyuby</span>
         </div>
         <div className="header-right">
@@ -182,18 +184,20 @@ export default function App() {
       </header>
 
       <main className="app-main">
-        <div className="month-nav">
-          <button className="btn-small btn-ghost" onClick={() => setCursor((c) => addMonths(c.year, c.month, -1))}>
-            ←
-          </button>
-          <h2>{monthLabel(cursor.year, cursor.month)}</h2>
-          <button className="btn-small btn-ghost" onClick={() => setCursor((c) => addMonths(c.year, c.month, 1))}>
-            →
-          </button>
+        <div className="hero-card">
+          <div className="month-nav">
+            <button className="btn-small btn-ghost" onClick={() => setCursor((c) => addMonths(c.year, c.month, -1))}>
+              ←
+            </button>
+            <h2>{monthLabel(cursor.year, cursor.month)}</h2>
+            <button className="btn-small btn-ghost" onClick={() => setCursor((c) => addMonths(c.year, c.month, 1))}>
+              →
+            </button>
+          </div>
+          <MonthSummary rows={rows} />
         </div>
 
         <AlertBanner alerts={alerts} />
-        <MonthSummary rows={rows} />
 
         <div className="section-header">
           <h3>Servicios y suscripciones</h3>

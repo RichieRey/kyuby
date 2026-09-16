@@ -21,7 +21,9 @@ export default function ItemList({ rows, year, month, onEdit, onPay, onUnpay }) 
         return (
           <div className="item-row" key={item.id}>
             <div className="item-main" onClick={() => onEdit(item)}>
-              <span className="cat-dot" style={{ background: catMeta.color }} />
+              <span className="cat-dot" style={{ background: catMeta.bg, color: catMeta.fg }}>
+                {catMeta.icon}
+              </span>
               <div className="item-text">
                 <span className="item-name">{item.name}</span>
                 <span className="item-meta">
@@ -34,9 +36,7 @@ export default function ItemList({ rows, year, month, onEdit, onPay, onUnpay }) 
               <span className="item-amount">
                 {formatCOP(status === 'pagado' ? payment?.paidAmount ?? item.amount : item.amount)}
               </span>
-              <span className="status-badge" style={{ color: meta.color, borderColor: meta.color }}>
-                {meta.label}
-              </span>
+              <span className={`status-badge status-${status}`}>{meta.label}</span>
               {status === 'pagado' ? (
                 <button className="btn-small btn-ghost" onClick={() => onUnpay(item, payment)}>
                   Deshacer

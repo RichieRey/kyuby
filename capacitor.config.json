@@ -1,0 +1,14 @@
+{
+  "appId": "com.richierey.kyuby",
+  "appName": "Kyuby",
+  "webDir": "dist-mobile",
+  "server": {
+    "androidScheme": "https"
+  },
+  "plugins": {
+    "FirebaseAuthentication": {
+      "skipNativeAuth": true,
+      "providers": ["google.com"]
+    }
+  }
+}

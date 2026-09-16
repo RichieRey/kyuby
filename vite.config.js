@@ -9,13 +9,13 @@ export default defineConfig({
     react(),
     VitePWA({
       registerType: 'autoUpdate',
-      includeAssets: ['icons/icon-192.png', 'icons/icon-512.png'],
+      includeAssets: ['icons/icon-192.png', 'icons/icon-512.png', 'icons/fox-mark.png'],
       manifest: {
         name: 'Kyuby',
         short_name: 'Kyuby',
-        description: 'Control de facturas y suscripciones del hogar',
-        theme_color: '#0f172a',
-        background_color: '#0f172a',
+        description: 'Home Bills & Subs',
+        theme_color: '#0B1220',
+        background_color: '#0B1220',
         display: 'standalone',
         start_url: '/kyuby/',
         scope: '/kyuby/',

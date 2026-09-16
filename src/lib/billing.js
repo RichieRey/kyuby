@@ -1,9 +1,9 @@
 // Lógica de fechas, estados y cálculos del mes — sin dependencias externas.
 
 export const CATEGORIES = {
-  servicio: { label: 'Servicio público', color: '#38bdf8' },
-  suscripcion: { label: 'Suscripción', color: '#a78bfa' },
-  otro: { label: 'Otro', color: '#94a3b8' },
+  servicio: { label: 'Servicio público', icon: '💡', bg: 'rgba(96, 165, 250, 0.16)', fg: '#60a5fa' },
+  suscripcion: { label: 'Suscripción', icon: '🎬', bg: 'rgba(192, 132, 252, 0.16)', fg: '#c084fc' },
+  otro: { label: 'Otro', icon: '🦊', bg: 'rgba(245, 121, 60, 0.16)', fg: '#f5793c' },
 }
 
 export function daysInMonth(year, month) {
@@ -32,10 +32,10 @@ export function statusFor(item, payment, year, month, today = new Date()) {
 }
 
 export const STATUS_META = {
-  pagado: { label: 'Pagado', color: '#22c55e' },
-  vencido: { label: 'Vencido', color: '#ef4444' },
-  proximo: { label: 'Próximo', color: '#f59e0b' },
-  pendiente: { label: 'Pendiente', color: '#64748b' },
+  pagado: { label: 'Pagado' },
+  vencido: { label: 'Vencido' },
+  proximo: { label: 'Próximo' },
+  pendiente: { label: 'Pendiente' },
 }
 
 export function monthLabel(year, month) {
