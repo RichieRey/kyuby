@@ -1,0 +1,23 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Solo ustedes dos (autenticados con Google) pueden leer/escribir.
+    // Si el correo de tu esposa es otro, reemplázalo abajo.
+    function isAuthorized() {
+      return request.auth != null &&
+        request.auth.token.email in [
+          "ricardoarjona028@gmail.com",
+          "jeragui10@gmail.com"
+        ];
+    }
+
+    match /items/{id}    { allow read, write: if isAuthorized(); }
+    match /payments/{id} { allow read, write: if isAuthorized(); }
+
+    // Todo lo demás: bloqueado por defecto.
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
