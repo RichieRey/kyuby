@@ -1,6 +1,6 @@
 # Kyuby
 
-Control de facturas y suscripciones del hogar (antes "FacturApp") — servicios públicos y
+Control de facturas y suscripciones del hogar — servicios públicos y
 suscripciones digitales en un solo lugar, con alertas antes del vencimiento.
 
 Construida como PWA (React + Vite), con Firebase (Auth + Firestore) como
