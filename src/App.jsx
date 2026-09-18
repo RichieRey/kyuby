@@ -173,7 +173,7 @@ export default function App() {
           <span className="brand-icon">
             <img src={`${import.meta.env.BASE_URL}icons/fox-mark.png`} alt="" />
           </span>
-          <span>Kyuby</span>
+          <span className="brand-name">Kyuby</span>
         </div>
         <div className="header-right">
           <span className="user-email">{user.email}</span>
