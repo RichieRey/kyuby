@@ -3,7 +3,6 @@ import {
   db,
   watchAuth,
   logout,
-  resolveGoogleRedirect,
   collection,
   onSnapshot,
   doc,
@@ -43,12 +42,6 @@ export default function App() {
   const [showDetectedBills, setShowDetectedBills] = useState(false)
 
   useEffect(() => watchAuth(setUser), [])
-
-  // Recoge el resultado del login con Google cuando volvemos del redirect
-  // (ver comentario en firebase.js sobre por qué es redirect y no popup).
-  useEffect(() => {
-    resolveGoogleRedirect()
-  }, [])
 
   useEffect(() => {
     if (!user) return
