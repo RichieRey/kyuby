@@ -4,7 +4,8 @@ import { FirebaseAuthentication } from '@capacitor-firebase/authentication'
 import {
   getAuth,
   GoogleAuthProvider,
-  signInWithPopup,
+  signInWithRedirect,
+  getRedirectResult,
   signInWithCredential,
   signOut,
   onAuthStateChanged,
@@ -95,6 +96,14 @@ function clearGmailAccessToken() {
 // ("disallowed_useragent"). Ahí usamos el selector nativo de cuentas de
 // Google y con el idToken que devuelve iniciamos sesión en el SDK de
 // Firebase (misma sesión/reglas que la versión web).
+//
+// En web usamos signInWithRedirect en vez de signInWithPopup: GitHub Pages
+// (como casi cualquier hosting moderno) manda una política
+// Cross-Origin-Opener-Policy que bloquea la comunicación entre la ventana
+// emergente y la app. El login básico igual funciona con popup, pero el
+// access token del scope extra (gmail.readonly) se pierde en el camino.
+// Con redirect no hay ventana emergente de por medio, así que no hay nada
+// que esa política pueda bloquear.
 export async function loginWithGoogle() {
   if (Capacitor.isNativePlatform()) {
     const result = await FirebaseAuthentication.signInWithGoogle({
@@ -106,10 +115,24 @@ export async function loginWithGoogle() {
     const credential = GoogleAuthProvider.credential(idToken)
     return signInWithCredential(auth, credential)
   }
-  const result = await signInWithPopup(auth, googleProvider)
-  const credential = GoogleAuthProvider.credentialFromResult(result)
-  storeGmailAccessToken(credential?.accessToken)
-  return result
+  // Esto navega fuera de la app (a accounts.google.com) y de vuelta — no
+  // hay nada útil que devolver acá. El resultado se recoge en
+  // resolveGoogleRedirect(), que hay que llamar una vez al cargar la app.
+  return signInWithRedirect(auth, googleProvider)
+}
+
+// Llamar una sola vez al arrancar la app (ver App.jsx). Si el usuario
+// acaba de volver de un signInWithRedirect, aquí es donde se recoge el
+// access token de Gmail que vino con el resultado.
+export async function resolveGoogleRedirect() {
+  try {
+    const result = await getRedirectResult(auth)
+    if (!result) return // no había un redirect pendiente — carga normal
+    const credential = GoogleAuthProvider.credentialFromResult(result)
+    storeGmailAccessToken(credential?.accessToken)
+  } catch (e) {
+    console.error('Error resolviendo el login con Google (redirect):', e)
+  }
 }
 
 export async function logout() {
