@@ -116,13 +116,6 @@ export async function loginWithGoogle() {
   }
   const result = await signInWithPopup(auth, googleProvider)
   const credential = GoogleAuthProvider.credentialFromResult(result)
-  // Log temporal de diagnóstico — bórralo cuando ya confirmemos que esto
-  // quedó funcionando bien. Dice, en consola, si el token de Gmail llegó.
-  console.log(
-    '[Kyuby] Login con Google OK. ¿Llegó el token de Gmail?',
-    credential?.accessToken ? 'SÍ' : 'NO — credential:',
-    credential?.accessToken ? '' : credential
-  )
   storeGmailAccessToken(credential?.accessToken)
   return result
 }
