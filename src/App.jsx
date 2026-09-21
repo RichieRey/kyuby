@@ -16,6 +16,7 @@ import MonthSummary from './components/MonthSummary'
 import ItemList from './components/ItemList'
 import ItemFormModal from './components/ItemFormModal'
 import PayModal from './components/PayModal'
+import DetectedBillsModal from './components/DetectedBillsModal'
 import {
   paymentId,
   statusFor,
@@ -38,6 +39,7 @@ export default function App() {
   const [editingItem, setEditingItem] = useState(null)
   const [showNewForm, setShowNewForm] = useState(false)
   const [payingItem, setPayingItem] = useState(null)
+  const [showDetectedBills, setShowDetectedBills] = useState(false)
 
   useEffect(() => watchAuth(setUser), [])
 
@@ -201,9 +203,14 @@ export default function App() {
 
         <div className="section-header">
           <h3>Servicios y suscripciones</h3>
-          <button className="btn-primary btn-small" onClick={() => setShowNewForm(true)}>
-            + Agregar
-          </button>
+          <div className="section-header-actions">
+            <button className="btn-small btn-ghost" onClick={() => setShowDetectedBills(true)}>
+              📥 Buscar en correo
+            </button>
+            <button className="btn-primary btn-small" onClick={() => setShowNewForm(true)}>
+              + Agregar
+            </button>
+          </div>
         </div>
 
         <ItemList
@@ -230,6 +237,10 @@ export default function App() {
 
       {payingItem && (
         <PayModal item={payingItem} onConfirm={confirmPay} onClose={() => setPayingItem(null)} />
+      )}
+
+      {showDetectedBills && (
+        <DetectedBillsModal items={activeItems} onClose={() => setShowDetectedBills(false)} />
       )}
     </div>
   )

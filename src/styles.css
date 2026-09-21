@@ -458,6 +458,49 @@ select:focus {
   font-weight: 700;
 }
 
+.section-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* Detected bills (Gmail) */
+.detected-bills-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.detected-bill-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 12px 14px;
+}
+
+.detected-bill-info {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  font-size: 13px;
+}
+
+.detected-bill-info strong {
+  font-size: 14px;
+  color: var(--text);
+}
+
+.detected-bill-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
 /* Item list */
 .item-list {
   display: flex;
