@@ -48,10 +48,20 @@ export default function DetectedBillsModal({ items, onClose }) {
         ])
         if (cancelled) return
         const processedIds = new Set(processedSnap.docs.map((d) => d.id))
-        const detected = messages
-          .map((m) => detectBillFromMessage(m))
+        // Log temporal de diagnóstico — bórralo cuando ya confirmemos que
+        // esto quedó funcionando bien.
+        console.log('[Kyuby] Correos con label Facturas encontrados:', messages.length)
+        console.log(
+          '[Kyuby] Detalle:',
+          messages.map((m) => ({ id: m.id, sender: m.sender, subject: m.subject }))
+        )
+        const rawDetected = messages.map((m) => detectBillFromMessage(m))
+        console.log('[Kyuby] Resultado de detectBillFromMessage por correo:', rawDetected)
+        console.log('[Kyuby] IDs ya marcados como procesados:', [...processedIds])
+        const detected = rawDetected
           .filter((d) => d && !processedIds.has(d.messageId))
           .map((d) => ({ ...d, matchedItem: matchExistingItem(items, d.proveedor) }))
+        console.log('[Kyuby] Candidatos finales a mostrar:', detected)
         setCandidates(detected)
         setStatus('ready')
       } catch (e) {
