@@ -15,6 +15,10 @@ service cloud.firestore {
     match /items/{id}    { allow read, write: if isAuthorized(); }
     match /payments/{id} { allow read, write: if isAuthorized(); }
 
+    // Registro de qué correos de facturas ya se revisaron (confirmados o
+    // ignorados), para no volver a mostrarlos en la cola de detección.
+    match /gmailImports/{id} { allow read, write: if isAuthorized(); }
+
     // Todo lo demás: bloqueado por defecto.
     match /{document=**} {
       allow read, write: if false;
