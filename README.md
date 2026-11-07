@@ -1,38 +1,36 @@
 # Kyuby — Home Bills & Subs
 
-Control de facturas y suscripciones del hogar (antes "FacturApp") — servicios públicos y
-suscripciones digitales en un solo lugar, con alertas antes del vencimiento.
+Control de servicios públicos y suscripciones del hogar (antes "FacturApp"), con alertas antes del
+vencimiento y lectura de facturas desde Gmail.
 
-Construida como PWA (React + Vite), con Firebase (Auth + Firestore) como
-backend, desplegada gratis en GitHub Pages vía GitHub Actions.
+PWA hecha con React + Vite, con Firebase (Auth + Firestore) como backend, publicada en GitHub Pages
+con GitHub Actions. También se compila como app Android con Capacitor.
 
-## Antes de desplegar
+## Datos y acceso
 
-1. Reemplaza el `firebaseConfig` en `src/firebase.js` con la config real de
-   tu proyecto Firebase (Configuración del proyecto → Tus apps → Config).
-2. Ajusta los correos autorizados en `firestore.rules` si el de tu pareja
-   es distinto a `jeragui10@gmail.com`, y publícalas en Firebase Console
-   (Firestore Database → Reglas).
-3. En Firebase Console → Authentication → Configuración → Dominios
-   autorizados, agrega `richierey.github.io`.
-4. En GitHub → Settings → Pages, en "Build and deployment" selecciona
-   **GitHub Actions** como source (el workflow en
-   `.github/workflows/deploy.yml` ya se encarga del resto: cada push a
-   `main` compila y publica automáticamente).
+- Los datos viven por hogar: `households/{id}` con `memberIds`, y adentro `items`, `payments` y
+  `gmailImports`.
+- Solo los miembros de un hogar leen y escriben sus datos (ver `firestore.rules`).
+- Para sumar a alguien: Hogar → Generar código. La otra persona inicia sesión, escoge "Tengo un
+  código" y lo escribe. El código sirve una vez y vence en 48 horas.
 
-## Desarrollo local (opcional)
+## Configuración
+
+1. Config web de Firebase: en GitHub → Settings → Secrets and variables → Actions, crea estos
+   secrets con los valores de Firebase Console → Configuración del proyecto → Tus apps → Config:
+   `VITE_FIREBASE_API_KEY`, `VITE_FIREBASE_AUTH_DOMAIN`, `VITE_FIREBASE_PROJECT_ID`,
+   `VITE_FIREBASE_STORAGE_BUCKET`, `VITE_FIREBASE_MESSAGING_SENDER_ID`, `VITE_FIREBASE_APP_ID`.
+   No son secretos de verdad; la seguridad está en las reglas y en los dominios autorizados.
+2. Publica `firestore.rules` en Firebase Console → Firestore Database → Reglas.
+3. En Firebase Console → Authentication → Configuración → Dominios autorizados debe estar
+   `richierey.github.io`.
+4. En GitHub → Settings → Pages, el source es **GitHub Actions**. Cada push a `main` compila y
+   publica.
+
+## Desarrollo local
 
 ```bash
+cp .env.example .env.local   # y llena los valores
 npm install
 npm run dev
 ```
-
-## Notas de alcance (MVP)
-
-- El registro de servicios/suscripciones y sus montos es manual — no hay
-  lectura automática de facturas ni integración con pasarelas de pago.
-- Las alertas de "próximo a vencer" / "vencido" se muestran dentro de la
-  app y, si el navegador lo permite, como notificación local — solo
-  mientras la app está abierta. Notificaciones push con la app cerrada
-  requieren Firebase Cloud Messaging + Cloud Functions (plan Blaze), fuera
-  del alcance de esta primera versión.
