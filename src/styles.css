@@ -794,3 +794,69 @@ select:focus {
 .migration-banner .error-text {
   margin-top: 0 !important;
 }
+
+.setup-tabs {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-bottom: 18px;
+}
+
+/* Panel del hogar */
+.household-button {
+  max-width: 180px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.household-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.household-subtitle {
+  margin: 6px 0 0;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-soft);
+}
+
+.household-members {
+  margin: 0 0 8px;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 14px;
+  overflow-wrap: anywhere;
+}
+
+.invite-box {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 14px 16px;
+  border-radius: var(--radius-md);
+  background: var(--accent-soft);
+  border: 1px solid rgba(245, 121, 60, 0.3);
+}
+
+.invite-code {
+  font-size: 26px;
+  font-weight: 800;
+  letter-spacing: 0.18em;
+  color: var(--accent);
+  font-family: ui-monospace, 'SFMono-Regular', Consolas, monospace;
+}
+
+.invite-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}

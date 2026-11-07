@@ -2,7 +2,14 @@
 // Hasta nov-2026 Kyuby guardaba items, payments y gmailImports en la raíz de
 // Firestore. Esto los COPIA al hogar con los mismos IDs (así los pagos siguen
 // apuntando a su item). Los originales no se tocan.
-import { collection, getDocs, writeBatch, updateDoc, doc, serverTimestamp } from 'firebase/firestore'
+import {
+  collection,
+  getDocs,
+  writeBatch,
+  updateDoc,
+  doc,
+  serverTimestamp,
+} from 'firebase/firestore'
 import { db } from '../firebase'
 import { hhDoc } from './household'
 

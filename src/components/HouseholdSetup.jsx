@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { logout } from '../firebase'
-import { createHousehold } from '../lib/household'
+import { createHousehold, joinHousehold, JoinError } from '../lib/household'
 import { migrateLegacyData } from '../lib/migration'
 
 // Pantalla para quien inicia sesión y todavía no pertenece a ningún hogar.
@@ -8,6 +8,8 @@ export default function HouseholdSetup({ user }) {
   const [name, setName] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
+  const [mode, setMode] = useState('create') // create | join
+  const [code, setCode] = useState('')
 
   async function handleCreate(e) {
     e.preventDefault()
@@ -29,6 +31,27 @@ export default function HouseholdSetup({ user }) {
     }
   }
 
+  async function handleJoin(e) {
+    e.preventDefault()
+    setBusy(true)
+    setError('')
+    try {
+      await joinHousehold(user, code)
+      // watchMyHousehold en App detecta que ya es miembro y cambia de pantalla.
+    } catch (err) {
+      console.error('Error uniéndose al hogar:', err)
+      setError(
+        err instanceof JoinError ? err.message : 'No se pudo entrar al hogar. Intenta de nuevo.',
+      )
+      setBusy(false)
+    }
+  }
+
+  function switchMode(next) {
+    setMode(next)
+    setError('')
+  }
+
   return (
     <div className="login-screen">
       <div className="login-card setup-card">
@@ -36,23 +59,64 @@ export default function HouseholdSetup({ user }) {
           <img src={`${import.meta.env.BASE_URL}icons/fox-mark.png`} alt="Kyuby" />
         </div>
         <h1>Tu hogar</h1>
-        <p>Kyuby guarda los servicios y pagos por hogar. Crea el tuyo para empezar.</p>
+        <p>
+          Kyuby guarda los servicios y pagos por hogar. Crea el tuyo o entra a uno con un código.
+        </p>
 
-        <form onSubmit={handleCreate} className="item-form">
-          <label>
-            Nombre del hogar
-            <input
-              type="text"
-              placeholder="Ej: Casa Arjona"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              maxLength={60}
-            />
-          </label>
-          <button type="submit" className="btn-primary" disabled={busy}>
-            {busy ? 'Creando…' : 'Crear hogar'}
+        <div className="setup-tabs">
+          <button
+            className={`btn-small ${mode === 'create' ? 'btn-primary' : 'btn-ghost'}`}
+            onClick={() => switchMode('create')}
+            type="button"
+          >
+            Crear hogar
           </button>
-        </form>
+          <button
+            className={`btn-small ${mode === 'join' ? 'btn-primary' : 'btn-ghost'}`}
+            onClick={() => switchMode('join')}
+            type="button"
+          >
+            Tengo un código
+          </button>
+        </div>
+
+        {mode === 'create' && (
+          <form onSubmit={handleCreate} className="item-form">
+            <label>
+              Nombre del hogar
+              <input
+                type="text"
+                placeholder="Ej: Casa Arjona"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                maxLength={60}
+              />
+            </label>
+            <button type="submit" className="btn-primary" disabled={busy}>
+              {busy ? 'Creando…' : 'Crear hogar'}
+            </button>
+          </form>
+        )}
+
+        {mode === 'join' && (
+          <form onSubmit={handleJoin} className="item-form">
+            <label>
+              Código de invitación
+              <input
+                type="text"
+                placeholder="Ej: K7PX2MQA"
+                value={code}
+                onChange={(e) => setCode(e.target.value.toUpperCase())}
+                maxLength={12}
+                autoCapitalize="characters"
+                autoComplete="off"
+              />
+            </label>
+            <button type="submit" className="btn-primary" disabled={busy}>
+              {busy ? 'Entrando…' : 'Entrar al hogar'}
+            </button>
+          </form>
+        )}
 
         {error && <p className="error-text">{error}</p>}
 

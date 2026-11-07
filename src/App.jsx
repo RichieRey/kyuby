@@ -4,6 +4,7 @@ import { watchMyHousehold, hhCollection, hhDoc } from './lib/household'
 import Login from './components/Login'
 import HouseholdSetup from './components/HouseholdSetup'
 import MigrationBanner from './components/MigrationBanner'
+import HouseholdPanel from './components/HouseholdPanel'
 import AlertBanner from './components/AlertBanner'
 import MonthSummary from './components/MonthSummary'
 import ItemList from './components/ItemList'
@@ -34,6 +35,7 @@ export default function App() {
   const [showNewForm, setShowNewForm] = useState(false)
   const [payingItem, setPayingItem] = useState(null)
   const [showDetectedBills, setShowDetectedBills] = useState(false)
+  const [showHousehold, setShowHousehold] = useState(false)
 
   useEffect(() => watchAuth(setUser), [])
 
@@ -201,6 +203,9 @@ export default function App() {
           <span className="brand-name">Kyuby</span>
         </div>
         <div className="header-right">
+          <button className="btn-small btn-ghost household-button" onClick={() => setShowHousehold(true)}>
+            🏠 {household.name}
+          </button>
           <span className="user-email">{user.email}</span>
           <button className="btn-small btn-ghost" onClick={logout}>
             Salir
@@ -264,6 +269,10 @@ export default function App() {
 
       {payingItem && (
         <PayModal item={payingItem} onConfirm={confirmPay} onClose={() => setPayingItem(null)} />
+      )}
+
+      {showHousehold && (
+        <HouseholdPanel household={household} user={user} onClose={() => setShowHousehold(false)} />
       )}
 
       {showDetectedBills && (
