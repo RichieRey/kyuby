@@ -753,3 +753,26 @@ select:focus {
     display: none;
   }
 }
+
+/* Hogar: crear / unirse */
+.setup-card {
+  text-align: left;
+}
+
+.setup-card h1,
+.setup-card .login-icon {
+  text-align: center;
+}
+
+.setup-card > p {
+  text-align: center;
+}
+
+.setup-card input {
+  width: 100%;
+}
+
+.setup-logout {
+  display: block;
+  margin: 22px auto 0;
+}
