@@ -22,15 +22,27 @@ import {
   enableIndexedDbPersistence,
 } from 'firebase/firestore'
 
-// ⚠️ Reemplaza con la config de TU proyecto Firebase:
-// Firebase Console → ⚙️ Configuración del proyecto → "Tus apps" → Config
+// La config web de Firebase llega por variables de entorno (VITE_FIREBASE_*):
+// en local desde .env.local (ver .env.example) y en GitHub Actions desde los
+// Secrets del repo. No es un secreto: la seguridad está en las reglas de
+// Firestore y en los dominios autorizados de Authentication.
 const firebaseConfig = {
-  apiKey: 'AIzaSyC3MnBWDeey6AvwqbUIAidIGLn1qEJPEC8',
-  authDomain: 'kuyby-11789.firebaseapp.com',
-  projectId: 'kuyby-11789',
-  storageBucket: 'kuyby-11789.firebasestorage.app',
-  messagingSenderId: '502227907291',
-  appId: '1:502227907291:web:f70bc2862b9d7d9d2612fe',
+  apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
+  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
+  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
+  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
+  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
+  appId: import.meta.env.VITE_FIREBASE_APP_ID,
+}
+
+const missing = Object.entries(firebaseConfig)
+  .filter(([, value]) => !value)
+  .map(([key]) => key)
+if (missing.length) {
+  throw new Error(
+    `Falta la config de Firebase (${missing.join(', ')}). ` +
+      'En local crea .env.local a partir de .env.example; en GitHub revisa los Secrets VITE_FIREBASE_*.'
+  )
 }
 
 export const app = initializeApp(firebaseConfig)
