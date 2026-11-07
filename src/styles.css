@@ -776,3 +776,21 @@ select:focus {
   display: block;
   margin: 22px auto 0;
 }
+
+.migration-banner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 14px;
+  margin-bottom: 18px;
+  padding: 14px 16px;
+  border-radius: var(--radius-md);
+  background: var(--info-soft);
+  border: 1px solid rgba(56, 189, 248, 0.25);
+  color: var(--text);
+  font-size: 13px;
+}
+
+.migration-banner .error-text {
+  margin-top: 0 !important;
+}

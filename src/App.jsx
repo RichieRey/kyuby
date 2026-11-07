@@ -3,6 +3,7 @@ import { watchAuth, logout, onSnapshot, setDoc, addDoc, serverTimestamp } from '
 import { watchMyHousehold, hhCollection, hhDoc } from './lib/household'
 import Login from './components/Login'
 import HouseholdSetup from './components/HouseholdSetup'
+import MigrationBanner from './components/MigrationBanner'
 import AlertBanner from './components/AlertBanner'
 import MonthSummary from './components/MonthSummary'
 import ItemList from './components/ItemList'
@@ -220,6 +221,10 @@ export default function App() {
           </div>
           <MonthSummary rows={rows} />
         </div>
+
+        {household.ownerId === user.uid && !household.legacyMigration && (
+          <MigrationBanner householdId={householdId} uid={user.uid} />
+        )}
 
         <AlertBanner alerts={alerts} />
 

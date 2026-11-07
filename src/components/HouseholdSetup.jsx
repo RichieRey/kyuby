@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { logout } from '../firebase'
 import { createHousehold } from '../lib/household'
+import { migrateLegacyData } from '../lib/migration'
 
 // Pantalla para quien inicia sesión y todavía no pertenece a ningún hogar.
 export default function HouseholdSetup({ user }) {
@@ -13,7 +14,13 @@ export default function HouseholdSetup({ user }) {
     setBusy(true)
     setError('')
     try {
-      await createHousehold(user, name)
+      const householdId = await createHousehold(user, name)
+      try {
+        await migrateLegacyData(householdId, user.uid)
+      } catch (migErr) {
+        // El hogar ya existe; la migración se puede reintentar desde el aviso en la app.
+        console.error('Error copiando los datos anteriores:', migErr)
+      }
       // watchMyHousehold en App detecta el hogar nuevo y cambia de pantalla.
     } catch (err) {
       console.error('Error creando el hogar:', err)
