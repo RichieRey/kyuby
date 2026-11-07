@@ -16,6 +16,24 @@ import { hhDoc } from './household'
 const LEGACY_COLLECTIONS = ['items', 'payments', 'gmailImports']
 const BATCH_LIMIT = 400
 
+// Hogares con una copia en curso en esta pestaña, para no mostrar el aviso de
+// "falta copiar" mientras la copia inicial todavía está corriendo.
+const inProgress = new Set()
+const listeners = new Set()
+
+function notify() {
+  listeners.forEach((fn) => fn())
+}
+
+export function subscribeMigrations(fn) {
+  listeners.add(fn)
+  return () => listeners.delete(fn)
+}
+
+export function isMigrating(householdId) {
+  return inProgress.has(householdId)
+}
+
 async function readLegacy(name) {
   try {
     const snap = await getDocs(collection(db, name))
@@ -28,6 +46,18 @@ async function readLegacy(name) {
 }
 
 export async function migrateLegacyData(householdId, uid) {
+  if (inProgress.has(householdId)) return null
+  inProgress.add(householdId)
+  notify()
+  try {
+    return await copyLegacy(householdId, uid)
+  } finally {
+    inProgress.delete(householdId)
+    notify()
+  }
+}
+
+async function copyLegacy(householdId, uid) {
   const counts = {}
   let hadAccess = false
 

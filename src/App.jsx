@@ -40,6 +40,7 @@ export default function App() {
   useEffect(() => watchAuth(setUser), [])
 
   useEffect(() => {
+    setAuthError('')
     if (!user) {
       setHousehold(undefined)
       return
@@ -203,7 +204,10 @@ export default function App() {
           <span className="brand-name">Kyuby</span>
         </div>
         <div className="header-right">
-          <button className="btn-small btn-ghost household-button" onClick={() => setShowHousehold(true)}>
+          <button
+            className="btn-small btn-ghost household-button"
+            onClick={() => setShowHousehold(true)}
+          >
             🏠 {household.name}
           </button>
           <span className="user-email">{user.email}</span>
@@ -272,14 +276,19 @@ export default function App() {
       )}
 
       {showHousehold && (
-        <HouseholdPanel household={household} user={user} onClose={() => setShowHousehold(false)} />
+        <HouseholdPanel
+          household={household}
+          user={user}
+          onClose={() => setShowHousehold(false)}
+        />
       )}
 
       {showDetectedBills && (
         <DetectedBillsModal
           householdId={householdId}
           items={activeItems}
-          onClose={() => setShowDetectedBills(false)} />
+          onClose={() => setShowDetectedBills(false)}
+        />
       )}
     </div>
   )
