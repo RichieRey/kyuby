@@ -4,15 +4,18 @@ import { setDoc, addDoc, getDocs, serverTimestamp, getGmailAccessToken } from '.
 import { hhCollection, hhDoc } from '../lib/household'
 import { fetchFacturaMessages, GmailAuthError } from '../lib/gmail'
 import { detectBillFromMessage } from '../lib/billParsers'
-import { formatCOP } from '../lib/billing'
+import { formatCOP, toISODate } from '../lib/billing'
 
-// Busca, entre los items activos, uno que ya corresponda al proveedor
-// detectado (por ejemplo "Claro Hogar" ya existente para un correo de
-// Claro). Coincidencia simple por nombre — suficiente para el uso personal
-// de esta app, sin necesidad de un ID de proveedor más formal.
+// Busca, entre los items activos, el que corresponde al proveedor detectado.
+// Primero por el campo proveedor (fase 2) y, si no hay, por el nombre
+// (por ejemplo "Claro Hogar" para un correo de Claro).
 function matchExistingItem(items, proveedor) {
   const needle = proveedor.toLowerCase()
-  return items.find((it) => it.name?.toLowerCase().includes(needle)) || null
+  return (
+    items.find((it) => it.proveedor?.toLowerCase() === needle) ||
+    items.find((it) => it.name?.toLowerCase().includes(needle)) ||
+    null
+  )
 }
 
 export default function DetectedBillsModal({ householdId, items, onClose }) {
@@ -77,18 +80,22 @@ export default function DetectedBillsModal({ householdId, items, onClose }) {
     setBusyId(candidate.messageId)
     try {
       if (candidate.matchedItem) {
-        await setDoc(
-          hhDoc(householdId, 'items', candidate.matchedItem.id),
-          { amount: candidate.valor },
-          { merge: true }
-        )
+        const update = { amount: candidate.valor }
+        // Si el correo trae la fecha límite de pago, pasa a ser el próximo vencimiento.
+        if (candidate.fechaPago) update.vencimiento = toISODate(candidate.fechaPago)
+        await setDoc(hhDoc(householdId, 'items', candidate.matchedItem.id), update, {
+          merge: true,
+        })
       } else {
         await addDoc(hhCollection(householdId, 'items'), {
           name: candidate.nombreSugerido,
-          category: candidate.categoriaSugerida,
+          tipo: candidate.categoriaSugerida,
+          proveedor: candidate.proveedor,
           amount: candidate.valor,
-          dueDay: candidate.fechaPago ? candidate.fechaPago.getDate() : 1,
+          periodicidad: 'mensual',
+          vencimiento: toISODate(candidate.fechaPago || new Date()),
           notes: 'Agregado automáticamente desde Gmail',
+          active: true,
           createdAt: serverTimestamp(),
         })
       }

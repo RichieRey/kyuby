@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { watchAuth, logout, onSnapshot, setDoc, addDoc, serverTimestamp } from './firebase'
+import { deleteField } from 'firebase/firestore'
 import { watchMyHousehold, hhCollection, hhDoc } from './lib/household'
 import Login from './components/Login'
 import HouseholdSetup from './components/HouseholdSetup'
@@ -16,6 +17,8 @@ import {
   statusFor,
   monthLabel,
   addMonths,
+  normalizeItem,
+  dueDateInMonth,
 } from './lib/billing'
 
 const DATA_ERROR_HINT =
@@ -88,15 +91,23 @@ export default function App() {
     }
   }, [user])
 
-  const activeItems = useMemo(() => items.filter((i) => i.active !== false), [items])
+  const activeItems = useMemo(
+    () => items.filter((i) => i.active !== false).map(normalizeItem),
+    [items]
+  )
 
+  // Solo los items que, según su periodicidad, vencen en el mes que se está viendo.
   const rows = useMemo(() => {
-    return activeItems.map((item) => {
-      const pid = paymentId(item.id, cursor.year, cursor.month)
-      const payment = payments[pid] || null
-      const status = statusFor(item, payment, cursor.year, cursor.month)
-      return { item, payment, status }
-    })
+    return activeItems
+      .map((item) => {
+        const due = dueDateInMonth(item, cursor.year, cursor.month)
+        if (!due) return null
+        const pid = paymentId(item.id, cursor.year, cursor.month)
+        const payment = payments[pid] || null
+        const status = statusFor(item, payment, cursor.year, cursor.month)
+        return { item, payment, status, due }
+      })
+      .filter(Boolean)
   }, [activeItems, payments, cursor])
 
   const alerts = useMemo(
@@ -122,7 +133,13 @@ export default function App() {
 
   async function saveItem(data) {
     if (editingItem) {
-      await setDoc(hhDoc(householdId, 'items', editingItem.id), data, { merge: true })
+      // Al guardar, el item queda en el formato nuevo: se quitan los campos
+      // de antes de la fase 2 (category y dueDay) si todavía estaban.
+      await setDoc(
+        hhDoc(householdId, 'items', editingItem.id),
+        { ...data, category: deleteField(), dueDay: deleteField() },
+        { merge: true }
+      )
     } else {
       await addDoc(hhCollection(householdId, 'items'), { ...data, createdAt: serverTimestamp() })
     }
@@ -251,8 +268,7 @@ export default function App() {
 
         <ItemList
           rows={rows}
-          year={cursor.year}
-          month={cursor.month}
+          hasItems={activeItems.length > 0}
           onEdit={setEditingItem}
           onPay={setPayingItem}
           onUnpay={unpay}
