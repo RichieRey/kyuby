@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { watchAuth, logout, onSnapshot, setDoc, addDoc, serverTimestamp } from './firebase'
+import { deleteField } from 'firebase/firestore'
 import { watchMyHousehold, hhCollection, hhDoc } from './lib/household'
 import Login from './components/Login'
 import HouseholdSetup from './components/HouseholdSetup'
@@ -132,7 +133,13 @@ export default function App() {
 
   async function saveItem(data) {
     if (editingItem) {
-      await setDoc(hhDoc(householdId, 'items', editingItem.id), data, { merge: true })
+      // Al guardar, el item queda en el formato nuevo: se quitan los campos
+      // de antes de la fase 2 (category y dueDay) si todavía estaban.
+      await setDoc(
+        hhDoc(householdId, 'items', editingItem.id),
+        { ...data, category: deleteField(), dueDay: deleteField() },
+        { merge: true }
+      )
     } else {
       await addDoc(hhCollection(householdId, 'items'), { ...data, createdAt: serverTimestamp() })
     }

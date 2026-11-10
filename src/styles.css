@@ -860,3 +860,9 @@ select:focus {
   gap: 8px;
   flex-wrap: wrap;
 }
+
+.field-hint {
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--text-soft);
+}

@@ -1,11 +1,21 @@
 import { useState } from 'react'
 import Modal from './Modal'
-import { CATEGORIES } from '../lib/billing'
+import { CATEGORIES, PERIODICIDADES, PROVEEDORES_SUGERIDOS, toISODate } from '../lib/billing'
 
-const empty = { name: '', category: 'servicio', amount: '', dueDay: '5', notes: '' }
+function emptyForm() {
+  return {
+    name: '',
+    tipo: 'servicio',
+    proveedor: '',
+    amount: '',
+    periodicidad: 'mensual',
+    vencimiento: toISODate(new Date()),
+    notes: '',
+  }
+}
 
 export default function ItemFormModal({ initial, onSave, onDelete, onClose }) {
-  const [form, setForm] = useState(initial ? { ...initial } : empty)
+  const [form, setForm] = useState(() => (initial ? { ...emptyForm(), ...initial } : emptyForm()))
   const isEdit = Boolean(initial)
 
   function set(field, value) {
@@ -14,13 +24,14 @@ export default function ItemFormModal({ initial, onSave, onDelete, onClose }) {
 
   function handleSubmit(e) {
     e.preventDefault()
-    if (!form.name.trim()) return
-    const dueDay = Math.min(31, Math.max(1, Number(form.dueDay) || 1))
+    if (!form.name.trim() || !form.vencimiento) return
     onSave({
       name: form.name.trim(),
-      category: form.category,
+      tipo: form.tipo,
+      proveedor: form.proveedor.trim(),
       amount: Number(form.amount) || 0,
-      dueDay,
+      periodicidad: form.periodicidad,
+      vencimiento: form.vencimiento,
       notes: form.notes?.trim() || '',
       active: true,
     })
@@ -35,26 +46,43 @@ export default function ItemFormModal({ initial, onSave, onDelete, onClose }) {
             type="text"
             value={form.name}
             onChange={(e) => set('name', e.target.value)}
-            placeholder="Ej. Energía, Netflix..."
+            placeholder="Ej. Gas, Netflix, Arriendo..."
             autoFocus
             required
           />
         </label>
 
-        <label>
-          Categoría
-          <select value={form.category} onChange={(e) => set('category', e.target.value)}>
-            {Object.entries(CATEGORIES).map(([key, meta]) => (
-              <option key={key} value={key}>
-                {meta.label}
-              </option>
-            ))}
-          </select>
-        </label>
+        <div className="form-row">
+          <label>
+            Tipo
+            <select value={form.tipo} onChange={(e) => set('tipo', e.target.value)}>
+              {Object.entries(CATEGORIES).map(([key, meta]) => (
+                <option key={key} value={key}>
+                  {meta.label}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label>
+            Proveedor
+            <input
+              type="text"
+              list="proveedores-sugeridos"
+              value={form.proveedor}
+              onChange={(e) => set('proveedor', e.target.value)}
+              placeholder="Ej. Vanti"
+            />
+            <datalist id="proveedores-sugeridos">
+              {PROVEEDORES_SUGERIDOS.map((p) => (
+                <option key={p} value={p} />
+              ))}
+            </datalist>
+          </label>
+        </div>
 
         <div className="form-row">
           <label>
-            Monto aproximado
+            Valor aproximado
             <input
               type="number"
               min="0"
@@ -64,17 +92,29 @@ export default function ItemFormModal({ initial, onSave, onDelete, onClose }) {
             />
           </label>
           <label>
-            Día de vencimiento
-            <input
-              type="number"
-              min="1"
-              max="31"
-              value={form.dueDay}
-              onChange={(e) => set('dueDay', e.target.value)}
-              required
-            />
+            Se paga
+            <select value={form.periodicidad} onChange={(e) => set('periodicidad', e.target.value)}>
+              {Object.entries(PERIODICIDADES).map(([key, meta]) => (
+                <option key={key} value={key}>
+                  {meta.label}
+                </option>
+              ))}
+            </select>
           </label>
         </div>
+
+        <label>
+          Próximo vencimiento
+          <input
+            type="date"
+            value={form.vencimiento}
+            onChange={(e) => set('vencimiento', e.target.value)}
+            required
+          />
+          <span className="field-hint">
+            Las fechas siguientes se calculan según cada cuánto se paga.
+          </span>
+        </label>
 
         <label>
           Notas (opcional)
