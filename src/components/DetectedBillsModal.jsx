@@ -1,15 +1,7 @@
 import { useEffect, useState } from 'react'
 import Modal from './Modal'
-import {
-  db,
-  collection,
-  doc,
-  setDoc,
-  addDoc,
-  getDocs,
-  serverTimestamp,
-  getGmailAccessToken,
-} from '../firebase'
+import { setDoc, addDoc, getDocs, serverTimestamp, getGmailAccessToken } from '../firebase'
+import { hhCollection, hhDoc } from '../lib/household'
 import { fetchFacturaMessages, GmailAuthError } from '../lib/gmail'
 import { detectBillFromMessage } from '../lib/billParsers'
 import { formatCOP } from '../lib/billing'
@@ -23,7 +15,7 @@ function matchExistingItem(items, proveedor) {
   return items.find((it) => it.name?.toLowerCase().includes(needle)) || null
 }
 
-export default function DetectedBillsModal({ items, onClose }) {
+export default function DetectedBillsModal({ householdId, items, onClose }) {
   const [status, setStatus] = useState('loading') // loading | ready | error
   const [errorMsg, setErrorMsg] = useState('')
   const [candidates, setCandidates] = useState([])
@@ -44,7 +36,7 @@ export default function DetectedBillsModal({ items, onClose }) {
       try {
         const [messages, processedSnap] = await Promise.all([
           fetchFacturaMessages(token),
-          getDocs(collection(db, 'gmailImports')),
+          getDocs(hhCollection(householdId, 'gmailImports')),
         ])
         if (cancelled) return
         const processedIds = new Set(processedSnap.docs.map((d) => d.id))
@@ -70,10 +62,10 @@ export default function DetectedBillsModal({ items, onClose }) {
     return () => {
       cancelled = true
     }
-  }, [items])
+  }, [householdId, items])
 
   async function markProcessed(candidate, resultStatus) {
-    await setDoc(doc(db, 'gmailImports', candidate.messageId), {
+    await setDoc(hhDoc(householdId, 'gmailImports', candidate.messageId), {
       status: resultStatus,
       proveedor: candidate.proveedor,
       valor: candidate.valor,
@@ -86,12 +78,12 @@ export default function DetectedBillsModal({ items, onClose }) {
     try {
       if (candidate.matchedItem) {
         await setDoc(
-          doc(db, 'items', candidate.matchedItem.id),
+          hhDoc(householdId, 'items', candidate.matchedItem.id),
           { amount: candidate.valor },
           { merge: true }
         )
       } else {
-        await addDoc(collection(db, 'items'), {
+        await addDoc(hhCollection(householdId, 'items'), {
           name: candidate.nombreSugerido,
           category: candidate.categoriaSugerida,
           amount: candidate.valor,

@@ -1,16 +1,10 @@
 import { useEffect, useMemo, useState } from 'react'
-import {
-  db,
-  watchAuth,
-  logout,
-  collection,
-  onSnapshot,
-  doc,
-  setDoc,
-  addDoc,
-  serverTimestamp,
-} from './firebase'
+import { watchAuth, logout, onSnapshot, setDoc, addDoc, serverTimestamp } from './firebase'
+import { watchMyHousehold, hhCollection, hhDoc } from './lib/household'
 import Login from './components/Login'
+import HouseholdSetup from './components/HouseholdSetup'
+import MigrationBanner from './components/MigrationBanner'
+import HouseholdPanel from './components/HouseholdPanel'
 import AlertBanner from './components/AlertBanner'
 import MonthSummary from './components/MonthSummary'
 import ItemList from './components/ItemList'
@@ -24,12 +18,13 @@ import {
   addMonths,
 } from './lib/billing'
 
-const AUTHORIZED_HINT =
-  'Tu cuenta de Google no está autorizada en Kyuby. Pídele al dueño que agregue tu correo en las reglas de Firestore.'
+const DATA_ERROR_HINT =
+  'No se pudieron cargar los datos del hogar. Revisa tu conexión o vuelve a iniciar sesión.'
 
 export default function App() {
   const [user, setUser] = useState(undefined) // undefined = cargando, null = sin sesión
   const [authError, setAuthError] = useState('')
+  const [household, setHousehold] = useState(undefined) // undefined = cargando, null = sin hogar
   const [items, setItems] = useState([])
   const [payments, setPayments] = useState({}) // keyed by paymentId
   const [cursor, setCursor] = useState(() => {
@@ -40,21 +35,40 @@ export default function App() {
   const [showNewForm, setShowNewForm] = useState(false)
   const [payingItem, setPayingItem] = useState(null)
   const [showDetectedBills, setShowDetectedBills] = useState(false)
+  const [showHousehold, setShowHousehold] = useState(false)
 
   useEffect(() => watchAuth(setUser), [])
 
   useEffect(() => {
-    if (!user) return
+    setAuthError('')
+    if (!user) {
+      setHousehold(undefined)
+      return
+    }
+    return watchMyHousehold(user.uid, setHousehold, (err) => {
+      console.error('Firestore household error:', err)
+      setAuthError(DATA_ERROR_HINT)
+    })
+  }, [user])
+
+  const householdId = household?.id
+
+  useEffect(() => {
+    if (!householdId) {
+      setItems([])
+      setPayments({})
+      return
+    }
     const unsubItems = onSnapshot(
-      collection(db, 'items'),
+      hhCollection(householdId, 'items'),
       (snap) => setItems(snap.docs.map((d) => ({ id: d.id, ...d.data() }))),
       (err) => {
         console.error('Firestore items error:', err)
-        setAuthError(AUTHORIZED_HINT)
+        setAuthError(DATA_ERROR_HINT)
       }
     )
     const unsubPayments = onSnapshot(
-      collection(db, 'payments'),
+      hhCollection(householdId, 'payments'),
       (snap) => {
         const map = {}
         snap.docs.forEach((d) => (map[d.id] = { id: d.id, ...d.data() }))
@@ -66,7 +80,7 @@ export default function App() {
       unsubItems()
       unsubPayments()
     }
-  }, [user])
+  }, [householdId])
 
   useEffect(() => {
     if (user && 'Notification' in window && Notification.permission === 'default') {
@@ -108,9 +122,9 @@ export default function App() {
 
   async function saveItem(data) {
     if (editingItem) {
-      await setDoc(doc(db, 'items', editingItem.id), data, { merge: true })
+      await setDoc(hhDoc(householdId, 'items', editingItem.id), data, { merge: true })
     } else {
-      await addDoc(collection(db, 'items'), { ...data, createdAt: serverTimestamp() })
+      await addDoc(hhCollection(householdId, 'items'), { ...data, createdAt: serverTimestamp() })
     }
     setEditingItem(null)
     setShowNewForm(false)
@@ -118,14 +132,14 @@ export default function App() {
 
   async function deleteItem(id) {
     if (!confirm('¿Eliminar este servicio/suscripción? Se conservará el historial de pagos.')) return
-    await setDoc(doc(db, 'items', id), { active: false }, { merge: true })
+    await setDoc(hhDoc(householdId, 'items', id), { active: false }, { merge: true })
     setEditingItem(null)
   }
 
   async function confirmPay({ paidAmount, paidDate }) {
     const item = payingItem
     const pid = paymentId(item.id, cursor.year, cursor.month)
-    await setDoc(doc(db, 'payments', pid), {
+    await setDoc(hhDoc(householdId, 'payments', pid), {
       itemId: item.id,
       year: cursor.year,
       month: cursor.month,
@@ -138,7 +152,7 @@ export default function App() {
 
   async function unpay(item, payment) {
     if (!payment) return
-    await setDoc(doc(db, 'payments', payment.id), { paid: false }, { merge: true })
+    await setDoc(hhDoc(householdId, 'payments', payment.id), { paid: false }, { merge: true })
   }
 
   if (user === undefined) {
@@ -151,6 +165,18 @@ export default function App() {
 
   if (!user) {
     return <Login error={authError} />
+  }
+
+  if (!authError && household === undefined) {
+    return (
+      <div className="loading-screen">
+        <div className="spinner" />
+      </div>
+    )
+  }
+
+  if (!authError && household === null) {
+    return <HouseholdSetup user={user} />
   }
 
   if (authError) {
@@ -178,6 +204,12 @@ export default function App() {
           <span className="brand-name">Kyuby</span>
         </div>
         <div className="header-right">
+          <button
+            className="btn-small btn-ghost household-button"
+            onClick={() => setShowHousehold(true)}
+          >
+            🏠 {household.name}
+          </button>
           <span className="user-email">{user.email}</span>
           <button className="btn-small btn-ghost" onClick={logout}>
             Salir
@@ -198,6 +230,10 @@ export default function App() {
           </div>
           <MonthSummary rows={rows} />
         </div>
+
+        {household.ownerId === user.uid && !household.legacyMigration && (
+          <MigrationBanner householdId={householdId} uid={user.uid} />
+        )}
 
         <AlertBanner alerts={alerts} />
 
@@ -239,8 +275,20 @@ export default function App() {
         <PayModal item={payingItem} onConfirm={confirmPay} onClose={() => setPayingItem(null)} />
       )}
 
+      {showHousehold && (
+        <HouseholdPanel
+          household={household}
+          user={user}
+          onClose={() => setShowHousehold(false)}
+        />
+      )}
+
       {showDetectedBills && (
-        <DetectedBillsModal items={activeItems} onClose={() => setShowDetectedBills(false)} />
+        <DetectedBillsModal
+          householdId={householdId}
+          items={activeItems}
+          onClose={() => setShowDetectedBills(false)}
+        />
       )}
     </div>
   )
