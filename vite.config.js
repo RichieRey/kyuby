@@ -1,10 +1,12 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
+import { buildDefines } from './build-info.js'
 import { VitePWA } from 'vite-plugin-pwa'
 
 // GitHub Pages project site: https://richierey.github.io/kyuby/
 export default defineConfig({
   base: '/kyuby/',
+  define: buildDefines,
   plugins: [
     react(),
     VitePWA({

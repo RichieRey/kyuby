@@ -384,6 +384,10 @@ export default function App() {
         />
       </main>
 
+      <footer className="app-version">
+        Kyuby · {import.meta.env.VITE_BUILD_DATE} · {import.meta.env.VITE_BUILD_SHA}
+      </footer>
+
       {(showNewForm || editingItem) && (
         <ItemFormModal
           initial={editingItem}

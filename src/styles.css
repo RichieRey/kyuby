@@ -915,3 +915,10 @@ select:focus {
 .detected-bill-date input {
   width: auto;
 }
+
+.app-version {
+  text-align: center;
+  font-size: 0.75rem;
+  opacity: 0.5;
+  padding: 24px 16px 32px;
+}
