@@ -896,3 +896,22 @@ select:focus {
 .gmail-bar .error-text {
   margin: 0 !important;
 }
+
+.alert-days {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 16px;
+}
+
+.detected-bill-date {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  font-size: 0.9rem;
+}
+
+.detected-bill-date input {
+  width: auto;
+}

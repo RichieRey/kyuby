@@ -28,10 +28,14 @@ import GmailBar from './components/GmailBar'
 import {
   paymentId,
   statusFor,
+  DEFAULT_DIAS_AVISO,
   monthLabel,
   addMonths,
   normalizeItem,
   dueDateInMonth,
+  daysUntil,
+  describeDays,
+  toISODate,
 } from './lib/billing'
 
 const DATA_ERROR_HINT =
@@ -126,6 +130,8 @@ export default function App() {
     [items]
   )
 
+  const diasAviso = household?.alertDias || DEFAULT_DIAS_AVISO
+
   // Solo los items que, según su periodicidad, vencen en el mes que se está viendo.
   const rows = useMemo(() => {
     return activeItems
@@ -134,31 +140,42 @@ export default function App() {
         if (!due) return null
         const pid = paymentId(item.id, cursor.year, cursor.month)
         const payment = payments[pid] || null
-        const status = statusFor(item, payment, cursor.year, cursor.month)
+        const status = statusFor(item, payment, cursor.year, cursor.month, diasAviso)
         return { item, payment, status, due }
       })
       .filter(Boolean)
-  }, [activeItems, payments, cursor])
+  }, [activeItems, payments, cursor, diasAviso])
 
   const alerts = useMemo(
     () => rows.filter((r) => r.status === 'vencido' || r.status === 'proximo'),
     [rows]
   )
 
-  // Notificación local (solo si la app está abierta) para pagos próximos/vencidos.
+  // Notificación del navegador con los vencidos y los próximos a vencer. Sale
+  // una vez al día (no cada vez que se abre la app) y solo mirando el mes actual.
   useEffect(() => {
     if (!('Notification' in window) || Notification.permission !== 'granted') return
     if (!alerts.length) return
-    const key = `kyuby_notified_${cursor.year}_${cursor.month}`
-    const already = sessionStorage.getItem(key)
-    if (already) return
-    sessionStorage.setItem(key, '1')
-    const vencidos = alerts.filter((a) => a.status === 'vencido').length
-    const proximos = alerts.filter((a) => a.status === 'proximo').length
+    const now = new Date()
+    if (cursor.year !== now.getFullYear() || cursor.month !== now.getMonth()) return
+    const key = 'kyuby_notified_day'
+    const today = toISODate(now)
+    try {
+      if (localStorage.getItem(key) === today) return
+      localStorage.setItem(key, today)
+    } catch {
+      // Sin almacenamiento: se avisa igual.
+    }
+    const describe = (a) => `${a.item.name} ${describeDays(daysUntil(a.due))}`
+    const vencidos = alerts.filter((a) => a.status === 'vencido').map(describe)
+    const proximos = alerts.filter((a) => a.status === 'proximo').map(describe)
     const parts = []
-    if (vencidos) parts.push(`${vencidos} vencido(s)`)
-    if (proximos) parts.push(`${proximos} por vencer`)
-    new Notification('Kyuby', { body: parts.join(' · '), icon: `${import.meta.env.BASE_URL}icons/icon-192.png` })
+    if (vencidos.length) parts.push(`Vencido: ${vencidos.join(', ')}`)
+    if (proximos.length) parts.push(`Por vencer: ${proximos.join(', ')}`)
+    new Notification('Kyuby', {
+      body: parts.join('\n'),
+      icon: `${import.meta.env.BASE_URL}icons/icon-192.png`,
+    })
   }, [alerts, cursor])
 
   async function runGmailScan(token) {
