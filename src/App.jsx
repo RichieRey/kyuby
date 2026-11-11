@@ -1,5 +1,17 @@
 import { useEffect, useMemo, useState } from 'react'
-import { watchAuth, logout, onSnapshot, setDoc, addDoc, serverTimestamp } from './firebase'
+import {
+  watchAuth,
+  logout,
+  onSnapshot,
+  setDoc,
+  addDoc,
+  serverTimestamp,
+  getGmailAccessToken,
+  clearGmailAccessToken,
+  connectGmail,
+} from './firebase'
+import { scanNewBills } from './lib/billScan'
+import { GmailAuthError } from './lib/gmail'
 import { deleteField } from 'firebase/firestore'
 import { watchMyHousehold, hhCollection, hhDoc } from './lib/household'
 import Login from './components/Login'
@@ -12,6 +24,7 @@ import ItemList from './components/ItemList'
 import ItemFormModal from './components/ItemFormModal'
 import PayModal from './components/PayModal'
 import DetectedBillsModal from './components/DetectedBillsModal'
+import GmailBar from './components/GmailBar'
 import {
   paymentId,
   statusFor,
@@ -39,6 +52,10 @@ export default function App() {
   const [payingItem, setPayingItem] = useState(null)
   const [showDetectedBills, setShowDetectedBills] = useState(false)
   const [showHousehold, setShowHousehold] = useState(false)
+  // Revisión de Gmail: idle | needs-auth | scanning | ready | error | dismissed
+  const [gmailState, setGmailState] = useState('idle')
+  const [gmailBills, setGmailBills] = useState([])
+  const [gmailError, setGmailError] = useState('')
 
   useEffect(() => watchAuth(setUser), [])
 
@@ -55,6 +72,19 @@ export default function App() {
   }, [user])
 
   const householdId = household?.id
+
+  // Al abrir la app (y al cambiar de hogar) revisa el correo si el permiso de
+  // Gmail sigue vigente; si no, muestra el botón para renovarlo.
+  useEffect(() => {
+    if (!householdId) return
+    const token = getGmailAccessToken()
+    if (!token) {
+      setGmailState('needs-auth')
+      return
+    }
+    runGmailScan(token)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [householdId])
 
   useEffect(() => {
     if (!householdId) {
@@ -130,6 +160,54 @@ export default function App() {
     if (proximos) parts.push(`${proximos} por vencer`)
     new Notification('Kyuby', { body: parts.join(' · '), icon: `${import.meta.env.BASE_URL}icons/icon-192.png` })
   }, [alerts, cursor])
+
+  async function runGmailScan(token) {
+    setGmailState('scanning')
+    setGmailError('')
+    try {
+      const bills = await scanNewBills(token, householdId)
+      setGmailBills(bills)
+      setGmailState('ready')
+      return bills
+    } catch (e) {
+      console.error('Error revisando Gmail:', e)
+      if (e instanceof GmailAuthError) {
+        clearGmailAccessToken()
+        setGmailState('needs-auth')
+      } else {
+        setGmailError('No se pudo revisar el correo. Intenta de nuevo en un momento.')
+        setGmailState('error')
+      }
+      return null
+    }
+  }
+
+  // Pide el permiso de Gmail (ventana de Google) y revisa. Debe venir de un toque.
+  async function connectAndScan() {
+    try {
+      const token = await connectGmail()
+      return await runGmailScan(token)
+    } catch (e) {
+      console.error('No se pudo conectar Gmail:', e)
+      setGmailError(
+        e?.code === 'auth/user-mismatch'
+          ? 'Escoge la misma cuenta de Google con la que entraste a Kyuby.'
+          : 'No se pudo conectar con Gmail.'
+      )
+      setGmailState('error')
+      return null
+    }
+  }
+
+  async function handleSearchMail() {
+    const token = getGmailAccessToken()
+    const bills = token ? await runGmailScan(token) : await connectAndScan()
+    if (bills) setShowDetectedBills(true)
+  }
+
+  function handleBillResolved(messageId) {
+    setGmailBills((prev) => prev.filter((b) => b.messageId !== messageId))
+  }
 
   async function saveItem(data) {
     if (editingItem) {
@@ -254,10 +332,24 @@ export default function App() {
 
         <AlertBanner alerts={alerts} />
 
+        <GmailBar
+          state={gmailState}
+          bills={gmailBills}
+          error={gmailError}
+          onConnect={connectAndScan}
+          onOpen={() => setShowDetectedBills(true)}
+          onRetry={handleSearchMail}
+          onDismiss={() => setGmailState('dismissed')}
+        />
+
         <div className="section-header">
           <h3>Servicios y suscripciones</h3>
           <div className="section-header-actions">
-            <button className="btn-small btn-ghost" onClick={() => setShowDetectedBills(true)}>
+            <button
+              className="btn-small btn-ghost"
+              onClick={handleSearchMail}
+              disabled={gmailState === 'scanning'}
+            >
               📥 Buscar en correo
             </button>
             <button className="btn-primary btn-small" onClick={() => setShowNewForm(true)}>
@@ -303,6 +395,8 @@ export default function App() {
         <DetectedBillsModal
           householdId={householdId}
           items={activeItems}
+          candidates={gmailBills}
+          onResolved={handleBillResolved}
           onClose={() => setShowDetectedBills(false)}
         />
       )}

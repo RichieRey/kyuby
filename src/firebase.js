@@ -5,6 +5,7 @@ import {
   getAuth,
   GoogleAuthProvider,
   signInWithPopup,
+  reauthenticateWithPopup,
   signInWithCredential,
   signOut,
   onAuthStateChanged,
@@ -65,41 +66,59 @@ const GMAIL_READONLY_SCOPE = 'https://www.googleapis.com/auth/gmail.readonly'
 googleProvider.addScope(GMAIL_READONLY_SCOPE)
 
 // El access token de Google (distinto del idToken/sesión de Firebase) es lo
-// que se necesita para llamar a la API de Gmail directamente desde el
-// cliente. Firebase NO lo persiste ni lo renueva solo, así que lo guardamos
-// nosotros. Vive en sessionStorage (no localStorage): se limpia solo al
-// cerrar la pestaña/app y no queda dando vueltas indefinidamente. Es un
-// token de corta duración (~1 hora) y de solo-lectura sobre Gmail, así que
-// el riesgo de tenerlo ahí es bajo, pero de todas formas se borra en logout.
-const GMAIL_TOKEN_KEY = 'kyuby_gmail_access_token'
+// que se necesita para llamar a la API de Gmail desde el cliente. Firebase no
+// lo guarda ni lo renueva, así que lo guardamos nosotros con su hora de
+// emisión. Dura una hora; lo damos por vencido a los 55 minutos. Va en
+// localStorage para que, si se vuelve a abrir la app dentro de esa hora, la
+// revisión del correo arranque sola. Es de solo lectura y se borra al salir.
+const GMAIL_TOKEN_KEY = 'kyuby_gmail_token'
+const GMAIL_TOKEN_TTL_MS = 55 * 60 * 1000
 
 function storeGmailAccessToken(accessToken) {
   if (!accessToken) return
   try {
-    sessionStorage.setItem(GMAIL_TOKEN_KEY, accessToken)
+    localStorage.setItem(GMAIL_TOKEN_KEY, JSON.stringify({ token: accessToken, at: Date.now() }))
   } catch (e) {
     console.warn('No se pudo guardar el token de Gmail:', e)
   }
 }
 
-// Úsalo desde cualquier parte de la app cuando llegue el momento de llamar
-// la API de Gmail (fetch a https://gmail.googleapis.com/... con
-// `Authorization: Bearer <token>`). Si devuelve null, el usuario tocará
-// volver a iniciar sesión para renovar el permiso/token.
+// Token vigente para la API de Gmail, o null si no hay o ya venció.
 export function getGmailAccessToken() {
   try {
-    return sessionStorage.getItem(GMAIL_TOKEN_KEY)
-  } catch (e) {
+    const saved = JSON.parse(localStorage.getItem(GMAIL_TOKEN_KEY) || 'null')
+    if (!saved?.token || Date.now() - saved.at > GMAIL_TOKEN_TTL_MS) return null
+    return saved.token
+  } catch {
     return null
   }
 }
 
-function clearGmailAccessToken() {
+export function clearGmailAccessToken() {
   try {
-    sessionStorage.removeItem(GMAIL_TOKEN_KEY)
-  } catch (e) {
+    localStorage.removeItem(GMAIL_TOKEN_KEY)
+    sessionStorage.removeItem('kyuby_gmail_access_token') // formato anterior
+  } catch {
     // noop
   }
+}
+
+// Pide un token nuevo de Gmail sin cerrar la sesión de Kyuby. Abre la
+// ventana de Google (en Android, el selector de cuentas), así que debe
+// llamarse desde un toque del usuario para que el navegador no la bloquee.
+export async function connectGmail() {
+  if (Capacitor.isNativePlatform()) {
+    const result = await FirebaseAuthentication.signInWithGoogle({
+      scopes: [GMAIL_READONLY_SCOPE],
+    })
+    storeGmailAccessToken(result?.credential?.accessToken)
+  } else {
+    const result = await reauthenticateWithPopup(auth.currentUser, googleProvider)
+    storeGmailAccessToken(GoogleAuthProvider.credentialFromResult(result)?.accessToken)
+  }
+  const token = getGmailAccessToken()
+  if (!token) throw new Error('Google no entregó el permiso de Gmail.')
+  return token
 }
 
 // En la app nativa (Android empaquetado con Capacitor) el popup de Google no

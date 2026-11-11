@@ -1,178 +1,128 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
+import { writeBatch, doc, collection } from 'firebase/firestore'
 import Modal from './Modal'
-import { setDoc, addDoc, getDocs, serverTimestamp, getGmailAccessToken } from '../firebase'
-import { hhCollection, hhDoc } from '../lib/household'
-import { fetchFacturaMessages, GmailAuthError } from '../lib/gmail'
-import { detectBillFromMessage } from '../lib/billParsers'
+import { db, serverTimestamp } from '../firebase'
+import { matchItem } from '../lib/billScan'
 import { formatCOP, toISODate } from '../lib/billing'
 
-// Busca, entre los items activos, el que corresponde al proveedor detectado.
-// Primero por el campo proveedor (fase 2) y, si no hay, por el nombre
-// (por ejemplo "Claro Hogar" para un correo de Claro).
-function matchExistingItem(items, proveedor) {
-  const needle = proveedor.toLowerCase()
-  return (
-    items.find((it) => it.proveedor?.toLowerCase() === needle) ||
-    items.find((it) => it.name?.toLowerCase().includes(needle)) ||
-    null
-  )
-}
-
-export default function DetectedBillsModal({ householdId, items, onClose }) {
-  const [status, setStatus] = useState('loading') // loading | ready | error
-  const [errorMsg, setErrorMsg] = useState('')
-  const [candidates, setCandidates] = useState([])
+// Muestra las facturas nuevas encontradas en Gmail. Al confirmar, actualiza
+// (o crea) el item del hogar; al ignorar, solo la marca como revisada. En
+// los dos casos queda registrada en gmailImports para no volver a mostrarla.
+export default function DetectedBillsModal({ householdId, items, candidates, onResolved, onClose }) {
   const [busyId, setBusyId] = useState(null)
+  const [error, setError] = useState('')
 
-  useEffect(() => {
-    let cancelled = false
+  const hhPath = ['households', householdId]
 
-    async function run() {
-      const token = getGmailAccessToken()
-      if (!token) {
-        setStatus('error')
-        setErrorMsg(
-          'No hay permiso de lectura de Gmail activo. Cierra sesión y vuelve a entrar para autorizarlo.'
-        )
-        return
-      }
-      try {
-        const [messages, processedSnap] = await Promise.all([
-          fetchFacturaMessages(token),
-          getDocs(hhCollection(householdId, 'gmailImports')),
-        ])
-        if (cancelled) return
-        const processedIds = new Set(processedSnap.docs.map((d) => d.id))
-        const rawDetected = messages.map((m) => detectBillFromMessage(m))
-        const detected = rawDetected
-          .filter((d) => d && !processedIds.has(d.messageId))
-          .map((d) => ({ ...d, matchedItem: matchExistingItem(items, d.proveedor) }))
-        setCandidates(detected)
-        setStatus('ready')
-      } catch (e) {
-        if (cancelled) return
-        console.error('Error buscando facturas en Gmail:', e)
-        setStatus('error')
-        setErrorMsg(
-          e instanceof GmailAuthError
-            ? e.message
-            : 'No se pudo consultar el correo. Intenta de nuevo en un momento.'
-        )
-      }
-    }
-
-    run()
-    return () => {
-      cancelled = true
-    }
-  }, [householdId, items])
-
-  async function markProcessed(candidate, resultStatus) {
-    await setDoc(hhDoc(householdId, 'gmailImports', candidate.messageId), {
-      status: resultStatus,
-      proveedor: candidate.proveedor,
-      valor: candidate.valor,
+  function markProcessed(batch, bill, status) {
+    batch.set(doc(db, ...hhPath, 'gmailImports', bill.messageId), {
+      status,
+      proveedor: bill.proveedor,
+      valor: bill.valor ?? null,
       at: serverTimestamp(),
     })
-  }
-
-  async function handleConfirm(candidate) {
-    setBusyId(candidate.messageId)
-    try {
-      if (candidate.matchedItem) {
-        const update = { amount: candidate.valor }
-        // Si el correo trae la fecha límite de pago, pasa a ser el próximo vencimiento.
-        if (candidate.fechaPago) update.vencimiento = toISODate(candidate.fechaPago)
-        await setDoc(hhDoc(householdId, 'items', candidate.matchedItem.id), update, {
-          merge: true,
-        })
-      } else {
-        await addDoc(hhCollection(householdId, 'items'), {
-          name: candidate.nombreSugerido,
-          tipo: candidate.categoriaSugerida,
-          proveedor: candidate.proveedor,
-          amount: candidate.valor,
-          periodicidad: 'mensual',
-          vencimiento: toISODate(candidate.fechaPago || new Date()),
-          notes: 'Agregado automáticamente desde Gmail',
-          active: true,
-          createdAt: serverTimestamp(),
-        })
-      }
-      await markProcessed(candidate, 'confirmed')
-      setCandidates((prev) => prev.filter((c) => c.messageId !== candidate.messageId))
-    } catch (e) {
-      console.error('Error guardando factura detectada:', e)
-      alert('No se pudo guardar. Intenta de nuevo.')
-    } finally {
-      setBusyId(null)
+    for (const olderId of bill.olderIds || []) {
+      batch.set(doc(db, ...hhPath, 'gmailImports', olderId), {
+        status: 'superseded',
+        proveedor: bill.proveedor,
+        at: serverTimestamp(),
+      })
     }
   }
 
-  async function handleIgnore(candidate) {
-    setBusyId(candidate.messageId)
+  async function resolve(bill, confirm) {
+    setBusyId(bill.messageId)
+    setError('')
     try {
-      await markProcessed(candidate, 'ignored')
-      setCandidates((prev) => prev.filter((c) => c.messageId !== candidate.messageId))
+      const batch = writeBatch(db)
+      if (confirm) {
+        const item = matchItem(items, bill)
+        if (item) {
+          const update = { amount: bill.valor, proveedor: item.proveedor || bill.proveedor }
+          // Si la factura trae la fecha límite, pasa a ser el próximo vencimiento.
+          if (bill.fechaPago) update.vencimiento = toISODate(bill.fechaPago)
+          batch.set(doc(db, ...hhPath, 'items', item.id), update, { merge: true })
+        } else {
+          batch.set(doc(collection(db, ...hhPath, 'items')), {
+            name: bill.nombreSugerido,
+            tipo: bill.categoriaSugerida,
+            proveedor: bill.proveedor,
+            amount: bill.valor,
+            periodicidad: 'mensual',
+            vencimiento: toISODate(bill.fechaPago || new Date()),
+            notes: 'Agregado desde Gmail',
+            active: true,
+            createdAt: serverTimestamp(),
+          })
+        }
+      }
+      markProcessed(batch, bill, confirm ? 'confirmed' : 'ignored')
+      await batch.commit()
+      onResolved(bill.messageId)
     } catch (e) {
-      console.error('Error ignorando factura detectada:', e)
+      console.error('Error guardando la factura detectada:', e)
+      setError('No se pudo guardar. Intenta de nuevo.')
     } finally {
       setBusyId(null)
     }
   }
 
   return (
-    <Modal title="Facturas detectadas en tu correo" onClose={onClose}>
-      {status === 'loading' && <p className="muted">Buscando en el label "Facturas"…</p>}
-
-      {status === 'error' && <p className="error-text">{errorMsg}</p>}
-
-      {status === 'ready' && candidates.length === 0 && (
+    <Modal title="Facturas nuevas en tu correo" onClose={onClose}>
+      {candidates.length === 0 && (
         <p className="muted">No hay facturas nuevas por revisar. Todo al día.</p>
       )}
 
-      {status === 'ready' && candidates.length > 0 && (
+      {candidates.length > 0 && (
         <div className="detected-bills-list">
-          {candidates.map((c) => (
-            <div className="detected-bill-card" key={c.messageId}>
-              <div className="detected-bill-info">
-                <strong>{c.nombreSugerido}</strong>
-                <span className="muted">
-                  {c.valor ? formatCOP(c.valor) : 'Monto no disponible aún'}
-                  {c.fechaPago ? ` · vence ${c.fechaPago.toLocaleDateString('es-CO')}` : ''}
-                </span>
-                <span className="muted">
-                  {c.matchedItem
-                    ? `Se actualizará "${c.matchedItem.name}"`
-                    : 'Se creará como servicio nuevo'}
-                </span>
-                {c.fuente === 'pdf-adjunto' && (
+          {candidates.map((c) => {
+            const item = matchItem(items, c)
+            return (
+              <div className="detected-bill-card" key={c.messageId}>
+                <div className="detected-bill-info">
+                  <strong>
+                    {c.proveedor} · {formatCOP(c.valor)}
+                  </strong>
                   <span className="muted">
-                    ⚠️ Este proveedor todavía requiere abrir el PDF a mano — próximamente se
-                    extrae solo.
+                    {c.fechaPago
+                      ? `Pagar hasta el ${c.fechaPago.toLocaleDateString('es-CO')}`
+                      : 'La factura no trae fecha límite'}
+                    {` · llegó el ${c.recibido.toLocaleDateString('es-CO')}`}
                   </span>
-                )}
+                  <span className="muted">
+                    {item
+                      ? `Se actualizará "${item.name}"`
+                      : `Se creará "${c.nombreSugerido}" como servicio nuevo`}
+                  </span>
+                  {!c.probado && (
+                    <span className="muted">
+                      Lector sin probar para este proveedor: revisa que el valor esté bien.
+                    </span>
+                  )}
+                </div>
+                <div className="detected-bill-actions">
+                  <button
+                    className="btn-primary btn-small"
+                    disabled={busyId === c.messageId}
+                    onClick={() => resolve(c, true)}
+                  >
+                    Confirmar
+                  </button>
+                  <button
+                    className="btn-small btn-ghost"
+                    disabled={busyId === c.messageId}
+                    onClick={() => resolve(c, false)}
+                  >
+                    Ignorar
+                  </button>
+                </div>
               </div>
-              <div className="detected-bill-actions">
-                <button
-                  className="btn-primary btn-small"
-                  disabled={!c.valor || busyId === c.messageId}
-                  onClick={() => handleConfirm(c)}
-                >
-                  Confirmar
-                </button>
-                <button
-                  className="btn-small btn-ghost"
-                  disabled={busyId === c.messageId}
-                  onClick={() => handleIgnore(c)}
-                >
-                  Ignorar
-                </button>
-              </div>
-            </div>
-          ))}
+            )
+          })}
         </div>
       )}
+
+      {error && <p className="error-text">{error}</p>}
     </Modal>
   )
 }
