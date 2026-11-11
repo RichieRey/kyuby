@@ -96,15 +96,32 @@ export function paymentId(itemId, year, month) {
   return `${itemId}_${year}_${String(month + 1).padStart(2, '0')}`
 }
 
-// status: 'pagado' | 'vencido' | 'proximo' (<=5 días) | 'pendiente'
-export function statusFor(item, payment, year, month, today = new Date()) {
+// Con cuántos días de anticipación avisar. Se elige por hogar
+// (households/{id}.alertDias); si no se ha elegido, 5.
+export const DIAS_AVISO = [1, 3, 5, 7]
+export const DEFAULT_DIAS_AVISO = 5
+
+// Días que faltan para una fecha (negativo si ya pasó), contando desde hoy.
+export function daysUntil(due, today = new Date()) {
+  const todayMid = new Date(today.getFullYear(), today.getMonth(), today.getDate())
+  return Math.round((due - todayMid) / 86400000)
+}
+
+// status: 'pagado' | 'vencido' | 'proximo' (faltan diasAviso días o menos) | 'pendiente'
+export function statusFor(
+  item,
+  payment,
+  year,
+  month,
+  diasAviso = DEFAULT_DIAS_AVISO,
+  today = new Date()
+) {
   if (payment?.paid) return 'pagado'
   const due = dueDateInMonth(item, year, month)
   if (!due) return null
-  const todayMid = new Date(today.getFullYear(), today.getMonth(), today.getDate())
-  const diffDays = Math.round((due - todayMid) / 86400000)
+  const diffDays = daysUntil(due, today)
   if (diffDays < 0) return 'vencido'
-  if (diffDays <= 5) return 'proximo'
+  if (diffDays <= diasAviso) return 'proximo'
   return 'pendiente'
 }
 

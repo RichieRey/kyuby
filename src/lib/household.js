@@ -7,6 +7,7 @@ import {
   addDoc,
   getDoc,
   setDoc,
+  updateDoc,
   onSnapshot,
   query,
   where,
@@ -118,4 +119,9 @@ export async function joinHousehold(user, rawCode) {
   batch.update(inviteRef, { usedBy: user.uid, usedAt: serverTimestamp() })
   await batch.commit()
   return invite.householdId
+}
+
+// Con cuántos días de anticipación avisa el hogar (ver DIAS_AVISO en billing.js).
+export function setAlertDays(householdId, dias) {
+  return updateDoc(doc(db, 'households', householdId), { alertDias: dias })
 }

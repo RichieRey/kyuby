@@ -28,6 +28,7 @@ import GmailBar from './components/GmailBar'
 import {
   paymentId,
   statusFor,
+  DEFAULT_DIAS_AVISO,
   monthLabel,
   addMonths,
   normalizeItem,
@@ -126,6 +127,8 @@ export default function App() {
     [items]
   )
 
+  const diasAviso = household?.alertDias || DEFAULT_DIAS_AVISO
+
   // Solo los items que, según su periodicidad, vencen en el mes que se está viendo.
   const rows = useMemo(() => {
     return activeItems
@@ -134,11 +137,11 @@ export default function App() {
         if (!due) return null
         const pid = paymentId(item.id, cursor.year, cursor.month)
         const payment = payments[pid] || null
-        const status = statusFor(item, payment, cursor.year, cursor.month)
+        const status = statusFor(item, payment, cursor.year, cursor.month, diasAviso)
         return { item, payment, status, due }
       })
       .filter(Boolean)
-  }, [activeItems, payments, cursor])
+  }, [activeItems, payments, cursor, diasAviso])
 
   const alerts = useMemo(
     () => rows.filter((r) => r.status === 'vencido' || r.status === 'proximo'),
@@ -330,7 +333,7 @@ export default function App() {
           <MigrationBanner householdId={householdId} uid={user.uid} />
         )}
 
-        <AlertBanner alerts={alerts} />
+        <AlertBanner alerts={alerts} diasAviso={diasAviso} />
 
         <GmailBar
           state={gmailState}

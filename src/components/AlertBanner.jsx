@@ -1,6 +1,6 @@
 import { formatCOP } from '../lib/billing'
 
-export default function AlertBanner({ alerts }) {
+export default function AlertBanner({ alerts, diasAviso }) {
   if (!alerts.length) return null
 
   const vencidos = alerts.filter((a) => a.status === 'vencido')
@@ -12,7 +12,8 @@ export default function AlertBanner({ alerts }) {
         <div className="alert-row alert-danger">
           <span className="alert-icon">⚠️</span>
           <span>
-            <strong>{vencidos.length}</strong> {vencidos.length === 1 ? 'pago vencido' : 'pagos vencidos'}:{' '}
+            <strong>{vencidos.length}</strong>{' '}
+            {vencidos.length === 1 ? 'pago vencido' : 'pagos vencidos'}:{' '}
             {vencidos.map((a) => a.item.name).join(', ')}
           </span>
         </div>
@@ -21,7 +22,9 @@ export default function AlertBanner({ alerts }) {
         <div className="alert-row alert-warning">
           <span className="alert-icon">⏰</span>
           <span>
-            <strong>{proximos.length}</strong> {proximos.length === 1 ? 'pago próximo a vencer' : 'pagos próximos a vencer'} (5 días o menos):{' '}
+            <strong>{proximos.length}</strong>{' '}
+            {proximos.length === 1 ? 'pago próximo a vencer' : 'pagos próximos a vencer'} (
+            {diasAviso === 1 ? '1 día' : `${diasAviso} días`} o menos):{' '}
             {proximos.map((a) => `${a.item.name} (${formatCOP(a.item.amount)})`).join(', ')}
           </span>
         </div>

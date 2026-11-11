@@ -896,3 +896,10 @@ select:focus {
 .gmail-bar .error-text {
   margin: 0 !important;
 }
+
+.alert-days {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 16px;
+}

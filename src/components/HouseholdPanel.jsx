@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import Modal from './Modal'
-import { createInvite, INVITE_HOURS } from '../lib/household'
+import { createInvite, setAlertDays, INVITE_HOURS } from '../lib/household'
+import { DIAS_AVISO, DEFAULT_DIAS_AVISO } from '../lib/billing'
 
 export default function HouseholdPanel({ household, user, onClose }) {
   const [invite, setInvite] = useState(null)
@@ -21,6 +22,16 @@ export default function HouseholdPanel({ household, user, onClose }) {
       setError('No se pudo generar el código. Intenta de nuevo.')
     } finally {
       setBusy(false)
+    }
+  }
+
+  async function handleAlertDays(dias) {
+    setError('')
+    try {
+      await setAlertDays(household.id, dias)
+    } catch (e) {
+      console.error('Error guardando los días de aviso:', e)
+      setError('No se pudo guardar el aviso. Intenta de nuevo.')
     }
   }
 
@@ -49,6 +60,20 @@ export default function HouseholdPanel({ household, user, onClose }) {
             </li>
           ))}
         </ul>
+
+        <h3 className="household-subtitle">Avisos</h3>
+        <p className="muted">Avisar cuando falten estos días o menos para un vencimiento:</p>
+        <div className="alert-days">
+          {DIAS_AVISO.map((d) => (
+            <button
+              key={d}
+              className={`btn-small ${(household.alertDias || DEFAULT_DIAS_AVISO) === d ? 'btn-primary' : 'btn-ghost'}`}
+              onClick={() => handleAlertDays(d)}
+            >
+              {d === 1 ? '1 día' : `${d} días`}
+            </button>
+          ))}
+        </div>
 
         <h3 className="household-subtitle">Invitar a alguien</h3>
         <p className="muted">
