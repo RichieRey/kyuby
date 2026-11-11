@@ -25,8 +25,20 @@ export default defineConfig({
         ],
       },
       workbox: {
-        // Firebase/Google endpoints: siempre red, nunca cache
+        // El HTML no va en el precache: se pide primero a la red (abajo, NetworkFirst)
+        // para que cada deploy se vea sin Ctrl+F5. JS y CSS llevan hash en el nombre,
+        // así que pueden ir en precache sin quedar viejos.
+        globPatterns: ['**/*.{js,css}'],
+        navigateFallback: null,
+        cleanupOutdatedCaches: true,
         runtimeCaching: [
+          {
+            // Páginas: red primero; si no hay red o tarda más de 3 s, la copia guardada.
+            urlPattern: ({ request }) => request.mode === 'navigate',
+            handler: 'NetworkFirst',
+            options: { cacheName: 'kyuby-html', networkTimeoutSeconds: 3 },
+          },
+          // Firebase/Google endpoints: siempre red, nunca cache
           {
             urlPattern: /^https:\/\/(firestore\.googleapis\.com|identitytoolkit\.googleapis\.com|securetoken\.googleapis\.com|www\.googleapis\.com)\/.*/,
             handler: 'NetworkOnly',
