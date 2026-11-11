@@ -1,116 +1,144 @@
-// Parsers de correos de facturas por proveedor.
+// Lectores de facturas por proveedor.
 //
-// Cada parser recibe un mensaje de Gmail ya leído (sender + plaintextBody,
-// tal como los devuelve la Gmail API — ver getGmailAccessToken() en
-// firebase.js) y, si reconoce el formato, devuelve un objeto con los datos
-// detectados. Si no lo reconoce, devuelve null: nunca lanza excepción para
-// no tumbar el escaneo de todo el buzón por un solo correo raro.
+// Cada proveedor declara sus correos remitentes y cómo sacar el valor y la
+// fecha límite. Para agregar uno nuevo basta con sumar una entrada a
+// PROVEEDORES_GMAIL. Los formatos marcados con `probado: true` se revisaron
+// con correos reales (nov-2026); los demás usan el lector genérico.
 //
-// Nada de esto guarda nada en Firestore por sí solo — eso lo hace la
-// pantalla de "facturas detectadas" después de que el usuario confirme.
+// Cada lector recibe el mensaje ya leído:
+//   { id, sender, subject, date, text, hasPdf, getPdfText }
+// y devuelve { valor, fechaPago, fuente } o null si no es una factura.
+// Nunca lanzan excepción para no tumbar el escaneo por un correo raro.
 
-const MESES_ES = {
-  ene: 0, feb: 1, mar: 2, abr: 3, may: 4, jun: 5,
-  jul: 6, ago: 7, sep: 8, oct: 9, nov: 10, dic: 11,
+import { findLabeledAmount, findDates, pickDueDate, parseGS1 } from './billText'
+
+function fromText(message) {
+  const valor = findLabeledAmount(message.text)
+  if (!valor) return null
+  return { valor, fechaPago: pickDueDate(findDates(message.text), message.date), fuente: 'correo' }
 }
 
-// Convierte montos en formato colombiano ("113.149", "$ 113.149", "1.234.567")
-// a número entero de pesos. El punto es separador de miles, no decimal.
-function parseCOPAmount(raw) {
-  if (!raw) return null
-  const digits = raw.replace(/[^\d]/g, '')
-  if (!digits) return null
-  return parseInt(digits, 10)
-}
-
-// "Sep 21/26" -> Date(2026, 8, 21). Asume año en formato corto (20YY).
-function parseShortDate(mesAbrev, dia, anioCorto) {
-  const mesIdx = MESES_ES[mesAbrev.toLowerCase().slice(0, 3)]
-  if (mesIdx === undefined) return null
-  const anio = 2000 + parseInt(anioCorto, 10)
-  return new Date(anio, mesIdx, parseInt(dia, 10))
-}
-
-// --- Claro (facturasclarocol@claro.com.co) -------------------------------
-//
-// Formato confirmado (revisado sep-2026): el cuerpo en texto plano trae el
-// monto y la fecha de pago directo, sin necesidad de abrir el zip adjunto
-// ni los links de pago. Ejemplo real:
-//   NO. DE CUENTA: 24107236
-//   MES Sep.
-//   VALOR A PAGAR $ 113.149
-//   FECHA DE PAGO Sep 21/26
-function parseClaro(message) {
-  const sender = (message?.sender || '').toLowerCase()
-  if (!sender.includes('facturasclarocol@claro.com.co')) return null
-
-  const body = message?.plaintextBody || ''
-
-  const cuentaMatch = body.match(/NO\.?\s*DE\s*CUENTA:?\s*(\d+)/i)
-  const valorMatch = body.match(/VALOR A PAGAR\s*\$?\s*([\d.,]+)/i)
-  const fechaMatch = body.match(/FECHA DE PAGO\s+([A-Za-zÁÉÍÓÚáéíóú]+)\.?\s+(\d{1,2})\/(\d{2})/i)
-  const mesMatch = body.match(/\bMES\s+([A-Za-zÁÉÍÓÚáéíóú]+)\.?/i)
-
-  const valor = parseCOPAmount(valorMatch?.[1])
-  if (!valor) return null // sin monto no sirve de nada — probablemente no es la factura
-
-  const fechaPago = fechaMatch
-    ? parseShortDate(fechaMatch[1], fechaMatch[2], fechaMatch[3])
-    : null
-
+async function fromPdf(message) {
+  if (!message.hasPdf) return null
+  const pdf = await message.getPdfText()
+  if (!pdf) return null
+  const gs1 = parseGS1(pdf)
+  const valor = gs1.valor || findLabeledAmount(pdf)
+  if (!valor) return null
   return {
-    proveedor: 'Claro',
-    categoriaSugerida: 'servicio',
-    nombreSugerido: 'Claro Hogar',
-    cuenta: cuentaMatch?.[1] || null,
-    mesFactura: mesMatch?.[1] || null,
     valor,
-    fechaPago,
-    messageId: message?.id || null,
-    fuente: 'texto-plano', // no requiere abrir adjuntos
+    fechaPago: gs1.fecha || pickDueDate(findDates(pdf), message.date),
+    fuente: 'pdf',
   }
 }
 
-// --- Vanti (facturas@grupovanti.com) --------------------------------------
-//
-// Formato confirmado (revisado sep-2026): el cuerpo es puro texto genérico
-// sin monto/fecha — esos datos están DENTRO del PDF adjunto ("Factura.pdf").
-// Este parser solo detecta que es un correo de Vanti y deja marcado que
-// necesita extracción de PDF; la extracción real del PDF se conecta después
-// (reusa el pipeline de OCR/texto de PDF que ya se había planeado para las
-// fotos de factura).
-function parseVanti(message) {
-  const sender = (message?.sender || '').toLowerCase()
-  if (!sender.includes('facturas@grupovanti.com')) return null
+// Genérico: primero el texto del correo y, si no trae el valor, el PDF adjunto.
+async function generic(message) {
+  return fromText(message) || (await fromPdf(message))
+}
 
-  const pdfAttachment = (message?.attachments || []).find(
-    (a) => a.mimeType === 'application/pdf'
-  )
-
-  return {
-    proveedor: 'Vanti',
-    categoriaSugerida: 'servicio',
+export const PROVEEDORES_GMAIL = [
+  {
+    id: 'claro',
+    nombre: 'Claro',
+    nombreSugerido: 'Claro Hogar',
+    tipo: 'servicio',
+    remitentes: ['facturasclarocol@claro.com.co'],
+    probado: true,
+    // "VALOR A PAGAR $ 113.149" y "FECHA DE PAGO Nov 23/26" en el cuerpo.
+    leer: async (m) => fromText(m),
+  },
+  {
+    id: 'vanti',
+    nombre: 'Vanti',
     nombreSugerido: 'Gas Vanti',
-    valor: null, // requiere abrir el PDF adjunto
-    fechaPago: null, // requiere abrir el PDF adjunto
-    messageId: message?.id || null,
-    attachmentId: pdfAttachment?.id || null,
-    fuente: 'pdf-adjunto', // pendiente: extraer texto del PDF
-  }
+    tipo: 'servicio',
+    remitentes: ['facturacioncolombia@grupovanti.com', 'facturas@grupovanti.com'],
+    probado: true,
+    // El correo no trae datos; el PDF trae el código de barras con el valor
+    // (3900) y la fecha de "Pago oportuno".
+    leer: async (m) => fromPdf(m),
+  },
+  {
+    id: 'tigo',
+    nombre: 'Tigo',
+    nombreSugerido: 'Tigo móvil',
+    tipo: 'servicio',
+    remitentes: ['facturas@facturas.tigo.com.co', 'facturas@factura.tigo.com.co'],
+    probado: true,
+    // "Valor a pagar a la fecha $54,207"; el correo no trae fecha límite.
+    leer: async (m) => fromText(m),
+  },
+  {
+    id: 'enel',
+    nombre: 'Enel',
+    nombreSugerido: 'Energía Enel',
+    tipo: 'servicio',
+    remitentes: ['enel.com'],
+    probado: false,
+    leer: generic,
+  },
+  {
+    id: 'etb',
+    nombre: 'ETB',
+    nombreSugerido: 'Internet ETB',
+    tipo: 'servicio',
+    remitentes: ['etb.com.co'],
+    probado: false,
+    leer: generic,
+  },
+  {
+    id: 'movistar',
+    nombre: 'Movistar',
+    nombreSugerido: 'Movistar',
+    tipo: 'servicio',
+    remitentes: ['movistar.com.co', 'telefonica.com'],
+    probado: false,
+    leer: generic,
+  },
+  {
+    id: 'acueducto',
+    nombre: 'Acueducto de Bogotá',
+    nombreSugerido: 'Agua',
+    tipo: 'servicio',
+    remitentes: ['acueducto.com.co'],
+    probado: false,
+    leer: generic,
+  },
+]
+
+// Consulta de Gmail: correos de los remitentes conocidos de los últimos días
+// que hablen de factura o de pagar (descarta avisos de contraseña, citas, etc.).
+export function gmailQuery(days = 60) {
+  const from = PROVEEDORES_GMAIL.flatMap((p) => p.remitentes).join(' OR ')
+  return `from:(${from}) newer_than:${days}d (factura OR pagar)`
 }
 
-// Lista de parsers activos. Se agregan más a medida que se confirma el
-// formato real de cada proveedor (ETB, agua, etc.) con un correo de muestra.
-const PARSERS = [parseClaro, parseVanti]
-
-// Intenta cada parser conocido sobre un mensaje de Gmail. Devuelve el
-// primer resultado no-nulo, o null si ningún proveedor conocido lo emitió.
-export function detectBillFromMessage(message) {
-  for (const parser of PARSERS) {
-    const result = parser(message)
-    if (result) return result
-  }
-  return null
+export function providerForSender(sender) {
+  const s = (sender || '').toLowerCase()
+  return PROVEEDORES_GMAIL.find((p) => p.remitentes.some((r) => s.includes(r))) || null
 }
 
-export { parseClaro, parseVanti, parseCOPAmount }
+// Devuelve el candidato listo para mostrar, o null si el correo no es una
+// factura de un proveedor conocido o no se le pudo sacar el valor.
+export async function detectBill(message) {
+  const provider = providerForSender(message.sender)
+  if (!provider) return null
+  let result = null
+  try {
+    result = await provider.leer(message)
+  } catch (e) {
+    console.warn(`No se pudo leer la factura de ${provider.nombre}:`, e)
+  }
+  if (!result) return null
+  return {
+    messageId: message.id,
+    proveedorId: provider.id,
+    proveedor: provider.nombre,
+    categoriaSugerida: provider.tipo,
+    nombreSugerido: provider.nombreSugerido,
+    probado: provider.probado,
+    recibido: message.date,
+    ...result,
+  }
+}
