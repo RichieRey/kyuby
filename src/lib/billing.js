@@ -107,6 +107,15 @@ export function daysUntil(due, today = new Date()) {
   return Math.round((due - todayMid) / 86400000)
 }
 
+// Texto corto para los días que faltan: "hoy", "mañana", "en 3 días",
+// "ayer", "hace 4 días".
+export function describeDays(days) {
+  if (days === 0) return 'hoy'
+  if (days === 1) return 'mañana'
+  if (days === -1) return 'ayer'
+  return days > 0 ? `en ${days} días` : `hace ${-days} días`
+}
+
 // status: 'pagado' | 'vencido' | 'proximo' (faltan diasAviso días o menos) | 'pendiente'
 export function statusFor(
   item,

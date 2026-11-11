@@ -33,6 +33,9 @@ import {
   addMonths,
   normalizeItem,
   dueDateInMonth,
+  daysUntil,
+  describeDays,
+  toISODate,
 } from './lib/billing'
 
 const DATA_ERROR_HINT =
@@ -148,20 +151,31 @@ export default function App() {
     [rows]
   )
 
-  // Notificación local (solo si la app está abierta) para pagos próximos/vencidos.
+  // Notificación del navegador con los vencidos y los próximos a vencer. Sale
+  // una vez al día (no cada vez que se abre la app) y solo mirando el mes actual.
   useEffect(() => {
     if (!('Notification' in window) || Notification.permission !== 'granted') return
     if (!alerts.length) return
-    const key = `kyuby_notified_${cursor.year}_${cursor.month}`
-    const already = sessionStorage.getItem(key)
-    if (already) return
-    sessionStorage.setItem(key, '1')
-    const vencidos = alerts.filter((a) => a.status === 'vencido').length
-    const proximos = alerts.filter((a) => a.status === 'proximo').length
+    const now = new Date()
+    if (cursor.year !== now.getFullYear() || cursor.month !== now.getMonth()) return
+    const key = 'kyuby_notified_day'
+    const today = toISODate(now)
+    try {
+      if (localStorage.getItem(key) === today) return
+      localStorage.setItem(key, today)
+    } catch {
+      // Sin almacenamiento: se avisa igual.
+    }
+    const describe = (a) => `${a.item.name} ${describeDays(daysUntil(a.due))}`
+    const vencidos = alerts.filter((a) => a.status === 'vencido').map(describe)
+    const proximos = alerts.filter((a) => a.status === 'proximo').map(describe)
     const parts = []
-    if (vencidos) parts.push(`${vencidos} vencido(s)`)
-    if (proximos) parts.push(`${proximos} por vencer`)
-    new Notification('Kyuby', { body: parts.join(' · '), icon: `${import.meta.env.BASE_URL}icons/icon-192.png` })
+    if (vencidos.length) parts.push(`Vencido: ${vencidos.join(', ')}`)
+    if (proximos.length) parts.push(`Por vencer: ${proximos.join(', ')}`)
+    new Notification('Kyuby', {
+      body: parts.join('\n'),
+      icon: `${import.meta.env.BASE_URL}icons/icon-192.png`,
+    })
   }, [alerts, cursor])
 
   async function runGmailScan(token) {
@@ -333,7 +347,7 @@ export default function App() {
           <MigrationBanner householdId={householdId} uid={user.uid} />
         )}
 
-        <AlertBanner alerts={alerts} diasAviso={diasAviso} />
+        <AlertBanner alerts={alerts} />
 
         <GmailBar
           state={gmailState}
