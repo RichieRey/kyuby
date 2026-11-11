@@ -8,9 +8,13 @@ import { formatCOP, toISODate } from '../lib/billing'
 // Muestra las facturas nuevas encontradas en Gmail. Al confirmar, actualiza
 // (o crea) el item del hogar; al ignorar, solo la marca como revisada. En
 // los dos casos queda registrada en gmailImports para no volver a mostrarla.
+// Si la factura no trae fecha límite, se pide antes de confirmar.
 export default function DetectedBillsModal({ householdId, items, candidates, onResolved, onClose }) {
   const [busyId, setBusyId] = useState(null)
   const [error, setError] = useState('')
+  // Fecha de vencimiento escrita a mano para las facturas que no la traen,
+  // por messageId ('YYYY-MM-DD').
+  const [fechas, setFechas] = useState({})
 
   const hhPath = ['households', householdId]
 
@@ -30,6 +34,12 @@ export default function DetectedBillsModal({ householdId, items, candidates, onR
     }
   }
 
+  // Fecha que se va a guardar: la de la factura o la que escribió el usuario.
+  function fechaFor(bill, item) {
+    if (bill.fechaPago) return toISODate(bill.fechaPago)
+    return fechas[bill.messageId] ?? item?.vencimiento ?? ''
+  }
+
   async function resolve(bill, confirm) {
     setBusyId(bill.messageId)
     setError('')
@@ -37,10 +47,10 @@ export default function DetectedBillsModal({ householdId, items, candidates, onR
       const batch = writeBatch(db)
       if (confirm) {
         const item = matchItem(items, bill)
+        const vencimiento = fechaFor(bill, item)
         if (item) {
           const update = { amount: bill.valor, proveedor: item.proveedor || bill.proveedor }
-          // Si la factura trae la fecha límite, pasa a ser el próximo vencimiento.
-          if (bill.fechaPago) update.vencimiento = toISODate(bill.fechaPago)
+          if (vencimiento) update.vencimiento = vencimiento
           batch.set(doc(db, ...hhPath, 'items', item.id), update, { merge: true })
         } else {
           batch.set(doc(collection(db, ...hhPath, 'items')), {
@@ -49,7 +59,7 @@ export default function DetectedBillsModal({ householdId, items, candidates, onR
             proveedor: bill.proveedor,
             amount: bill.valor,
             periodicidad: 'mensual',
-            vencimiento: toISODate(bill.fechaPago || new Date()),
+            vencimiento,
             notes: 'Agregado desde Gmail',
             active: true,
             createdAt: serverTimestamp(),
@@ -77,6 +87,7 @@ export default function DetectedBillsModal({ householdId, items, candidates, onR
         <div className="detected-bills-list">
           {candidates.map((c) => {
             const item = matchItem(items, c)
+            const fecha = fechaFor(c, item)
             return (
               <div className="detected-bill-card" key={c.messageId}>
                 <div className="detected-bill-info">
@@ -89,6 +100,18 @@ export default function DetectedBillsModal({ householdId, items, candidates, onR
                       : 'La factura no trae fecha límite'}
                     {` · llegó el ${c.recibido.toLocaleDateString('es-CO')}`}
                   </span>
+                  {!c.fechaPago && (
+                    <label className="detected-bill-date">
+                      <span>¿Hasta cuándo se paga?</span>
+                      <input
+                        type="date"
+                        value={fecha}
+                        onChange={(e) =>
+                          setFechas((prev) => ({ ...prev, [c.messageId]: e.target.value }))
+                        }
+                      />
+                    </label>
+                  )}
                   <span className="muted">
                     {item
                       ? `Se actualizará "${item.name}"`
@@ -103,7 +126,8 @@ export default function DetectedBillsModal({ householdId, items, candidates, onR
                 <div className="detected-bill-actions">
                   <button
                     className="btn-primary btn-small"
-                    disabled={busyId === c.messageId}
+                    disabled={busyId === c.messageId || !fecha}
+                    title={fecha ? undefined : 'Escribe la fecha de vencimiento'}
                     onClick={() => resolve(c, true)}
                   >
                     Confirmar
